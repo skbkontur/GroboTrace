@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroboTrace", "GroboTrace\GroboTrace.csproj", "{721F6C9C-8718-4848-B568-5904F860044D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj", "{23854843-A385-4299-8D52-3E567CECB004}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{721F6C9C-8718-4848-B568-5904F860044D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{721F6C9C-8718-4848-B568-5904F860044D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{721F6C9C-8718-4848-B568-5904F860044D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{721F6C9C-8718-4848-B568-5904F860044D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{23854843-A385-4299-8D52-3E567CECB004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{23854843-A385-4299-8D52-3E567CECB004}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{23854843-A385-4299-8D52-3E567CECB004}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{23854843-A385-4299-8D52-3E567CECB004}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

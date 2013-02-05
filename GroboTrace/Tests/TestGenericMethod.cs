@@ -1,0 +1,65 @@
+﻿using System.Collections.Generic;
+
+using GroboContainer.Core;
+using GroboContainer.Impl;
+
+using GroboTrace;
+
+using NUnit.Framework;
+
+namespace Tests
+{
+    [TestFixture]
+    public class TestGenericMethod
+    {
+        [SetUp]
+        public void SetUp()
+        {
+            container = new Container(new ContainerConfiguration(GetType().Module.Assembly), new TracingWrapper());
+        }
+
+        [Test]
+        public void Test1()
+        {
+            var instance = container.Get<I2>();
+            var arg1 = new C1<int>();
+            instance.F(arg1, -1);
+            Assert.AreEqual(1, arg1.Count);
+            Assert.AreEqual(-1, arg1[0]);
+        }
+
+        public class C1<T> : I1<T>
+        {
+            public void Add(T arg)
+            {
+                list.Add(arg);
+            }
+
+            public T this[int index] { get { return list[index]; } set { list[index] = value; } }
+
+            public int Count { get { return list.Count; } }
+            private readonly List<T> list = new List<T>();
+        }
+
+        public class C2 : I2
+        {
+            public void F<T1, T2>(T1 arg1, T2 arg2) where T1 : I1<T2>
+            {
+                arg1.Add(arg2);
+            }
+        }
+
+        public interface I1<T>
+        {
+            void Add(T arg);
+        }
+
+        public interface I2
+        {
+            void F<T1, T2>(T1 arg1, T2 arg2)
+                where T1 : I1<T2>;
+        }
+
+        private Container container;
+    }
+}
