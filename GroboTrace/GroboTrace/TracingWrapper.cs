@@ -9,38 +9,40 @@ using System.Runtime.InteropServices;
 
 using GroboContainer.Core;
 
-using GroboTrace.Exceptions;
-
 namespace GroboTrace
 {
     public class TracingWrapper : IClassWrapperCreator
     {
         public Type Wrap(Type implementationType)
         {
-            if(!implementationType.IsPublic && !implementationType.IsNestedPublic)
-                throw new InaccessibleTypeException(implementationType);
+            var @public = IsPublic(implementationType);
             TypeBuilder typeBuilder = module.DefineType(implementationType + "_Wrapper_" + Guid.NewGuid(), TypeAttributes.Public | TypeAttributes.Class);
-            FieldBuilder implField = typeBuilder.DefineField("impl", implementationType, FieldAttributes.Private | FieldAttributes.InitOnly);
+            FieldBuilder implField = typeBuilder.DefineField("impl", typeof(object), FieldAttributes.Private | FieldAttributes.InitOnly);
             BuildConstructor(typeBuilder, implField);
             var fieldsValues = new List<KeyValuePair<FieldBuilder, object>>();
             var builtMethods = new HashSet<MethodInfo>();
             foreach(var interfaceType in implementationType.GetInterfaces())
             {
+                if(!IsPublic(interfaceType))
+                    continue;
                 var interfaceMap = implementationType.GetInterfaceMap(interfaceType);
                 for(int index = 0; index < interfaceMap.InterfaceMethods.Length; ++index)
                 {
                     builtMethods.Add(interfaceMap.TargetMethods[index]);
-                    var methodBuilder = BuildMethod(typeBuilder, interfaceMap.TargetMethods[index], implField, fieldsValues);
+                    var methodBuilder = BuildMethod(typeBuilder, interfaceMap.TargetMethods[index], interfaceMap.InterfaceMethods[index], implField, fieldsValues);
                     typeBuilder.DefineMethodOverride(methodBuilder, interfaceMap.InterfaceMethods[index]);
                 }
                 typeBuilder.AddInterfaceImplementation(interfaceType);
             }
-            var methods = implementationType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
-            foreach(var method in methods)
+            if(@public)
             {
-                if(builtMethods.Contains(method))
-                    continue;
-                BuildMethod(typeBuilder, method, implField, fieldsValues);
+                var methods = implementationType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+                foreach(var method in methods)
+                {
+                    if(builtMethods.Contains(method))
+                        continue;
+                    BuildMethod(typeBuilder, method, method, implField, fieldsValues);
+                }
             }
 
             typeBuilder.DefineMethodOverride(BuildUnWrapMethod(typeBuilder, implField), classWrapperUnWrapMethod);
@@ -53,6 +55,13 @@ namespace GroboTrace
         }
 
         public static Func<long> GetTicks { get { return getTicks; } }
+
+        private static bool IsPublic(Type type)
+        {
+            if(!type.IsNested)
+                return type.IsPublic;
+            return type.IsNestedPublic && IsPublic(type.DeclaringType);
+        }
 
         private static Action GetFieldsInitializer(TypeBuilder typeBuilder, List<KeyValuePair<FieldBuilder, object>> fields)
         {
@@ -125,16 +134,16 @@ namespace GroboTrace
             return type;
         }
 
-        private static MethodBuilder BuildMethod(TypeBuilder typeBuilder, MethodInfo methodInfo, FieldInfo implField, List<KeyValuePair<FieldBuilder, object>> fieldsValues)
+        private static MethodBuilder BuildMethod(TypeBuilder typeBuilder, MethodInfo implementationMethod, MethodInfo abstractionMethod, FieldInfo implField, List<KeyValuePair<FieldBuilder, object>> fieldsValues)
         {
-            var parameters = methodInfo.GetParameters();
-            var method = typeBuilder.DefineMethod(methodInfo.Name, methodInfo.IsVirtual ? MethodAttributes.Public | MethodAttributes.Virtual : MethodAttributes.Public, CallingConventions.HasThis, methodInfo.ReturnType,
-                                                  methodInfo.ReturnParameter == null ? null : methodInfo.ReturnParameter.GetRequiredCustomModifiers(),
-                                                  methodInfo.ReturnParameter == null ? null : methodInfo.ReturnParameter.GetOptionalCustomModifiers(),
+            var parameters = implementationMethod.GetParameters();
+            var method = typeBuilder.DefineMethod(implementationMethod.Name, implementationMethod.IsVirtual ? MethodAttributes.Public | MethodAttributes.Virtual : MethodAttributes.Public, CallingConventions.HasThis, implementationMethod.ReturnType,
+                                                  implementationMethod.ReturnParameter == null ? null : implementationMethod.ReturnParameter.GetRequiredCustomModifiers(),
+                                                  implementationMethod.ReturnParameter == null ? null : implementationMethod.ReturnParameter.GetOptionalCustomModifiers(),
                                                   parameters.Select(parameter => parameter.ParameterType).ToArray(),
                                                   parameters.Select(parameter => parameter.GetRequiredCustomModifiers()).ToArray(),
                                                   parameters.Select(parameter => parameter.GetOptionalCustomModifiers()).ToArray());
-            foreach(var customAttribute in methodInfo.GetCustomAttributesData())
+            foreach(var customAttribute in implementationMethod.GetCustomAttributesData())
             {
                 var constructorArgs = customAttribute.ConstructorArguments.Select(argument => argument.Value).ToArray();
                 var properties = new List<PropertyInfo>();
@@ -162,9 +171,9 @@ namespace GroboTrace
                 method.SetCustomAttribute(new CustomAttributeBuilder(customAttribute.Constructor, constructorArgs, properties.ToArray(), propertyValues.ToArray(), fields.ToArray(), fieldValues.ToArray()));
             }
 
-            if(methodInfo.IsGenericMethod)
+            if(implementationMethod.IsGenericMethod)
             {
-                var genericArguments = methodInfo.GetGenericArguments();
+                var genericArguments = implementationMethod.GetGenericArguments();
                 var genericParameters = method.DefineGenericParameters(genericArguments.Select(type => type.Name).ToArray());
                 for(int index = 0; index < genericArguments.Length; index++)
                 {
@@ -177,14 +186,14 @@ namespace GroboTrace
 
             var il = method.GetILGenerator();
 
-            LocalBuilder result = methodInfo.ReturnType == typeof(void) ? null : il.DeclareLocal(methodInfo.ReturnType);
+            LocalBuilder result = implementationMethod.ReturnType == typeof(void) ? null : il.DeclareLocal(implementationMethod.ReturnType);
             var startTicks = il.DeclareLocal(typeof(long));
             var endTicks = il.DeclareLocal(typeof(long));
 
-            FieldBuilder methodField = typeBuilder.DefineField("method_" + methodInfo.Name, typeof(MethodInfo), FieldAttributes.Private | FieldAttributes.InitOnly | FieldAttributes.Static);
-            FieldBuilder methodHandleField = typeBuilder.DefineField("methodHandle_" + methodInfo.Name, typeof(long), FieldAttributes.Private | FieldAttributes.InitOnly | FieldAttributes.Static);
-            fieldsValues.Add(new KeyValuePair<FieldBuilder, object>(methodField, methodInfo));
-            fieldsValues.Add(new KeyValuePair<FieldBuilder, object>(methodHandleField, methodInfo.MethodHandle.Value.ToInt64()));
+            FieldBuilder methodField = typeBuilder.DefineField("method_" + implementationMethod.Name, typeof(MethodInfo), FieldAttributes.Private | FieldAttributes.InitOnly | FieldAttributes.Static);
+            FieldBuilder methodHandleField = typeBuilder.DefineField("methodHandle_" + implementationMethod.Name, typeof(long), FieldAttributes.Private | FieldAttributes.InitOnly | FieldAttributes.Static);
+            fieldsValues.Add(new KeyValuePair<FieldBuilder, object>(methodField, implementationMethod));
+            fieldsValues.Add(new KeyValuePair<FieldBuilder, object>(methodHandleField, implementationMethod.MethodHandle.Value.ToInt64()));
 
             il.Emit(OpCodes.Ldnull); // stack: [null]
             il.Emit(OpCodes.Ldfld, methodField); // stack: [method]
@@ -204,7 +213,7 @@ namespace GroboTrace
             il.Emit(OpCodes.Ldfld, implField); // stack: [impl]
             for(int i = 0; i < parameters.Length; ++i)
                 il.Emit(OpCodes.Ldarg_S, i + 1); // stack: [impl, parameters]
-            il.EmitCall(OpCodes.Callvirt, methodInfo, null); // impl.method(parameters)
+            il.EmitCall(OpCodes.Callvirt, abstractionMethod, null); // impl.method(parameters)
             if(result != null)
                 il.Emit(OpCodes.Stloc_S, result); // result = impl.method(parameters)
 
