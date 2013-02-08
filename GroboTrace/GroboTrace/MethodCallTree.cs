@@ -37,7 +37,7 @@ namespace GroboTrace
             var statsDict = new Dictionary<MethodInfo, MethodStats>();
             foreach(var child in root.Children)
                 child.GetStats(statsDict);
-            var result = statsDict.Values.OrderByDescending(stats => stats.Ticks).ToList();
+            var result = statsDict.Values.Concat(new[] {new MethodStats {Calls = 1, Ticks = elapsedTicks - statsDict.Values.Sum(node => node.Ticks)}}).OrderByDescending(stats => stats.Ticks).ToList();
             foreach(var stats in result)
                 stats.Percent = stats.Ticks * 100.0 / elapsedTicks;
             return result;
