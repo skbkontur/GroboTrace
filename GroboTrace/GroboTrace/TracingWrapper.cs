@@ -269,14 +269,17 @@ namespace GroboTrace
 
         private static IntPtr GetTicksReaderAddress()
         {
-            string dllName = string.Format("rdtsc{0}.dll", IntPtr.Size == 4 ? "32" : "64");
-            var rdtscDll = Assembly.GetExecutingAssembly().GetManifestResourceStream("GroboTrace.Rdtsc." + dllName);
+            string resourceName = string.Format("rdtsc{0}.dll", IntPtr.Size == 4 ? "32" : "64");
+            var rdtscDll = Assembly.GetExecutingAssembly().GetManifestResourceStream("GroboTrace.Rdtsc." + resourceName);
             if(rdtscDll != null)
             {
                 var rdtscDllContent = new byte[rdtscDll.Length];
                 if(rdtscDll.Read(rdtscDllContent, 0, rdtscDllContent.Length) == rdtscDllContent.Length)
                 {
-                    string rdtscDllFileName = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, dllName);
+                    var directoryName = AppDomain.CurrentDomain.BaseDirectory; //Path.GetDirectoryName(new Uri(Assembly.GetExecutingAssembly().CodeBase).LocalPath);
+                    if(string.IsNullOrEmpty(directoryName))
+                        throw new InvalidOperationException("Unable to obtain binaries directory");
+                    string rdtscDllFileName = Path.Combine(directoryName, string.Format("rdtsc{0}_{1}.dll", IntPtr.Size == 4 ? "32" : "64", Guid.NewGuid().ToString("N")));
                     File.WriteAllBytes(rdtscDllFileName, rdtscDllContent);
                     IntPtr rdtscDllModuleHandle = LoadLibrary(rdtscDllFileName);
                     if(rdtscDllModuleHandle != IntPtr.Zero)
