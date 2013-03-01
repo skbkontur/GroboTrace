@@ -5,6 +5,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using GroboContainer.Core;
@@ -55,9 +56,12 @@ namespace GroboTrace
         }
 
         public static Func<long> GetTicks { get { return getTicks; } }
+        public const string WrappersAssemblyName = "b5cc8d5b-fd0e-4b90-b545-d5c09c3ea040";
 
         private static bool IsPublic(Type type)
         {
+            if(type.Assembly.GetCustomAttributes(true).OfType<InternalsVisibleToAttribute>().Any(attribute => attribute.AssemblyName == WrappersAssemblyName))
+                return true;
             if(!type.IsNested)
                 return type.IsPublic;
             return type.IsNestedPublic && IsPublic(type.DeclaringType);
@@ -310,7 +314,7 @@ namespace GroboTrace
             return (Func<long>)dynamicMethod.CreateDelegate(typeof(Func<long>));
         }
 
-        private static readonly AssemblyBuilder assembly = AppDomain.CurrentDomain.DefineDynamicAssembly(new AssemblyName(Guid.NewGuid().ToString()), AssemblyBuilderAccess.Run);
+        private static readonly AssemblyBuilder assembly = AppDomain.CurrentDomain.DefineDynamicAssembly(new AssemblyName(WrappersAssemblyName), AssemblyBuilderAccess.Run);
         private static readonly ModuleBuilder module = assembly.DefineDynamicModule(Guid.NewGuid().ToString());
 
         private static readonly IntPtr ticksReaderAddress = GetTicksReaderAddress();
