@@ -78,7 +78,10 @@ namespace GroboTrace
                 il.Emit(OpCodes.Ldarg_0); // stack: [null, values]
                 il.Emit(OpCodes.Ldc_I4, index); // stack: [null, values, index]
                 il.Emit(OpCodes.Ldelem_Ref); // stack: [null, values[index]]
-                il.Emit(OpCodes.Stfld, fields[index].Key); // field = values[index]
+                var field = fields[index].Key;
+                if(field.FieldType.IsValueType)
+                    il.Emit(OpCodes.Unbox_Any, field.FieldType);
+                il.Emit(OpCodes.Stfld, field); // field = values[index]
                 values.Add(fields[index].Value);
             }
             il.Emit(OpCodes.Ret);
