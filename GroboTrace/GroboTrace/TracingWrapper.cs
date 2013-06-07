@@ -10,9 +10,9 @@ using System.Runtime.InteropServices;
 
 namespace GroboTrace
 {
-    public class TracingWrapper
+    public static class TracingWrapper
     {
-        public Type Wrap(Type implementationType)
+        public static Type Wrap(Type implementationType)
         {
             var @public = IsPublic(implementationType);
             TypeBuilder typeBuilder = module.DefineType(implementationType + "_Wrapper_" + Guid.NewGuid(), TypeAttributes.Public | TypeAttributes.Class);

@@ -9,18 +9,10 @@ namespace Tests
     [TestFixture]
     public abstract class TestBase
     {
-        [SetUp]
-        public virtual void SetUp()
+        protected static TInterface Create<TInterface, TImplementation>()
         {
-            tracingWrapper = new TracingWrapper();
-        }
-
-        protected TInterface Create<TInterface, TImplementation>()
-        {
-            var type = tracingWrapper.Wrap(typeof(TImplementation));
+            var type = TracingWrapper.Wrap(typeof(TImplementation));
             return (TInterface)Activator.CreateInstance(type, Activator.CreateInstance(typeof(TImplementation)));
         }
-
-        protected TracingWrapper tracingWrapper;
     }
 }
