@@ -202,10 +202,8 @@ namespace GroboTrace
             fieldsValues.Add(new KeyValuePair<FieldBuilder, object>(methodField, implementationMethod));
             fieldsValues.Add(new KeyValuePair<FieldBuilder, object>(methodHandleField, implementationMethod.MethodHandle.Value.ToInt64()));
 
-            il.Emit(OpCodes.Ldnull); // stack: [null]
-            il.Emit(OpCodes.Ldfld, methodField); // stack: [method]
-            il.Emit(OpCodes.Ldnull); // stack: [method, null]
-            il.Emit(OpCodes.Ldfld, methodHandleField); // stack: [method, methodHandle]
+            il.Emit(OpCodes.Ldsfld, methodField); // stack: [method]
+            il.Emit(OpCodes.Ldsfld, methodHandleField); // stack: [method, methodHandle]
             il.EmitCall(OpCodes.Call, tracingAnalyzerMethodStartedMethod, null); // TracingAnalyzer.MethodStarted(method, methodHandle)
             il.Emit(OpCodes.Ldloca_S, startTicks); // stack: [ref startTicks]
             if(IntPtr.Size == 4)
@@ -235,10 +233,8 @@ namespace GroboTrace
                 il.Emit(OpCodes.Ldc_I8, ticksReaderAddress.ToInt64());
             il.EmitCalli(OpCodes.Calli, CallingConvention.StdCall, typeof(void), new[] {typeof(IntPtr)}); // GetTicks(ref endTicks)
 
-            il.Emit(OpCodes.Ldnull); // stack: [null]
-            il.Emit(OpCodes.Ldfld, methodField); // stack: [method]
-            il.Emit(OpCodes.Ldnull); // stack: [method, null]
-            il.Emit(OpCodes.Ldfld, methodHandleField); // stack: [method, methodHandle]
+            il.Emit(OpCodes.Ldsfld, methodField); // stack: [method]
+            il.Emit(OpCodes.Ldsfld, methodHandleField); // stack: [method, methodHandle]
 
             il.Emit(OpCodes.Ldloc_S, endTicks); // stack: [method, methodHandle, endTicks]
             il.Emit(OpCodes.Ldloc_S, startTicks); // stack: [method, methodHandle, endTicks, startTicks]
