@@ -31,9 +31,6 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="GroboContainer">
-      <HintPath>..\..\Assemblies\GroboContainer.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -45,6 +42,7 @@
   <ItemGroup>
     <Compile Include="Exceptions\InaccessibleInterfaceException.cs" />
     <Compile Include="Exceptions\InaccessibleTypeException.cs" />
+    <Compile Include="IClassWrapper.cs" />
     <Compile Include="MethodCallNode.cs" />
     <Compile Include="MethodCallTree.cs" />
     <Compile Include="MethodStats.cs" />

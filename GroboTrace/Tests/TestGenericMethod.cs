@@ -1,27 +1,15 @@
 ﻿using System.Collections.Generic;
 
-using GroboContainer.Core;
-using GroboContainer.Impl;
-
-using GroboTrace;
-
 using NUnit.Framework;
 
 namespace Tests
 {
-    [TestFixture]
-    public class TestGenericMethod
+    public class TestGenericMethod : TestBase
     {
-        [SetUp]
-        public void SetUp()
-        {
-            container = new Container(new ContainerConfiguration(GetType().Module.Assembly), new TracingWrapper());
-        }
-
         [Test]
         public void Test1()
         {
-            var instance = container.Get<I2>();
+            var instance = Create<I2, C2>();
             var arg1 = new C1<int>();
             instance.F(arg1, -1);
             Assert.AreEqual(1, arg1.Count);
@@ -59,7 +47,5 @@ namespace Tests
             void F<T1, T2>(T1 arg1, T2 arg2)
                 where T1 : I1<T2>;
         }
-
-        private Container container;
     }
 }

@@ -1,28 +1,18 @@
 ﻿using System;
 using System.Diagnostics;
 
-using GroboContainer.Core;
-using GroboContainer.Impl;
-
 using GroboTrace;
 
 using NUnit.Framework;
 
 namespace Tests
 {
-    [TestFixture]
-    public class Test
+    public class Test : TestBase
     {
-        [SetUp]
-        public void SetUp()
-        {
-            container = new Container(new ContainerConfiguration(GetType().Module.Assembly), new TracingWrapper());
-        }
-
         [Test]
         public void TestImplIsCorrectlyCalled()
         {
-            var instance = container.Get<I1>();
+            var instance = Create<I1, C1>();
             int z;
             Assert.AreEqual("3", instance.F(1, out z));
             Assert.AreEqual(2, z);
@@ -33,7 +23,7 @@ namespace Tests
         [Test]
         public void TestUnWrap()
         {
-            var instance = container.Get<I1>();
+            var instance = Create<I1, C1>();
             var c = (C1)((IClassWrapper)instance).UnWrap();
             int z;
             Assert.AreEqual("3", instance.F(1, out z));
@@ -45,7 +35,7 @@ namespace Tests
         [Test]
         public void TestPerformance()
         {
-            var instance = container.Get<I1>();
+            var instance = Create<I1, C1>();
             const int iter = 100000000;
             var stopwatch = Stopwatch.StartNew();
             for(int i = 0; i < iter; ++i)
@@ -75,7 +65,5 @@ namespace Tests
             void DoNothing();
             int X { get; set; }
         }
-
-        private Container container;
     }
 }

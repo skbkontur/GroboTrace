@@ -8,11 +8,9 @@ using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using GroboContainer.Core;
-
 namespace GroboTrace
 {
-    public class TracingWrapper : IClassWrapperCreator
+    public class TracingWrapper
     {
         public Type Wrap(Type implementationType)
         {

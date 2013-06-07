@@ -1,25 +1,15 @@
-﻿using GroboContainer.Core;
-using GroboContainer.Impl;
-
-using GroboTrace;
+﻿using GroboTrace;
 
 using NUnit.Framework;
 
 namespace Tests
 {
-    [TestFixture]
-    public class TestNonPublic
+    public class TestNonPublic : TestBase
     {
-        [SetUp]
-        public void SetUp()
-        {
-            container = new Container(new ContainerConfiguration(GetType().Module.Assembly), new TracingWrapper());
-        }
-
         [Test]
         public void Test()
         {
-            var instance = container.Get<I1>();
+            var instance = Create<I1, C1>();
             Assert.IsNotNull(instance);
             instance.DoNothing();
             Assert.IsTrue(((C1)((IClassWrapper)instance).UnWrap()).Called);
@@ -30,17 +20,14 @@ namespace Tests
             void DoNothing();
         }
 
-        internal class C1: I1
+        internal class C1 : I1
         {
-            public bool Called { get; private set; }
-
             public void DoNothing()
             {
                 Called = true;
             }
+
+            public bool Called { get; private set; }
         }
-
-
-        private Container container;
     }
 }
