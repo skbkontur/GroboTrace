@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,7 +13,50 @@ namespace GroboTrace
 {
     public static class TracingWrapper
     {
+        public static object WrapAndCreate(object instance)
+        {
+            return GetWrapperTypeAndCreator(instance.GetType()).Item2(instance);
+        }
+
         public static Type Wrap(Type implementationType)
+        {
+            return GetWrapperTypeAndCreator(implementationType).Item1;
+        }
+
+        public static Func<long> GetTicks { get { return getTicks; } }
+        public const string WrappersAssemblyName = "b5cc8d5b-fd0e-4b90-b545-d5c09c3ea040";
+
+        private static Tuple<Type, Func<object, object>> GetWrapperTypeAndCreator(Type implementationType)
+        {
+            var wrapperTypeAndCreator = (Tuple<Type, Func<object, object>>)wrapperTypes[implementationType];
+            if(wrapperTypeAndCreator == null)
+            {
+                lock(wrapperTypesLock)
+                {
+                    wrapperTypeAndCreator = (Tuple<Type, Func<object, object>>)wrapperTypes[implementationType];
+                    if(wrapperTypeAndCreator == null)
+                    {
+                        var wrapperType = WrapInternal(implementationType);
+                        wrapperTypeAndCreator = new Tuple<Type, Func<object, object>>(wrapperType, EmitWrapperCreator(wrapperType));
+                        wrapperTypes[implementationType] = wrapperTypeAndCreator;
+                    }
+                }
+            }
+            return wrapperTypeAndCreator;
+        }
+
+        private static Func<object, object> EmitWrapperCreator(Type wrapperType)
+        {
+            var method = new DynamicMethod(wrapperType.Name + "_Creator_" + Guid.NewGuid(), typeof(object), new[] {typeof(object)}, module, true);
+            var constructor = wrapperType.GetConstructors().Single();
+            var il = method.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Newobj, constructor);
+            il.Emit(OpCodes.Ret);
+            return (Func<object, object>)method.CreateDelegate(typeof(Func<object, object>));
+        }
+
+        private static Type WrapInternal(Type implementationType)
         {
             var @public = IsPublic(implementationType);
             TypeBuilder typeBuilder = module.DefineType(implementationType + "_Wrapper_" + Guid.NewGuid(), TypeAttributes.Public | TypeAttributes.Class);
@@ -52,9 +96,6 @@ namespace GroboTrace
             initializer();
             return wrapper;
         }
-
-        public static Func<long> GetTicks { get { return getTicks; } }
-        public const string WrappersAssemblyName = "b5cc8d5b-fd0e-4b90-b545-d5c09c3ea040";
 
         private static bool IsPublic(Type type)
         {
@@ -310,6 +351,9 @@ namespace GroboTrace
             il.Emit(OpCodes.Ret);
             return (Func<long>)dynamicMethod.CreateDelegate(typeof(Func<long>));
         }
+
+        private static readonly Hashtable wrapperTypes = new Hashtable();
+        private static readonly object wrapperTypesLock = new object();
 
         private static readonly AssemblyBuilder assembly = AppDomain.CurrentDomain.DefineDynamicAssembly(new AssemblyName(WrappersAssemblyName), AssemblyBuilderAccess.Run);
         private static readonly ModuleBuilder module = assembly.DefineDynamicModule(Guid.NewGuid().ToString());
