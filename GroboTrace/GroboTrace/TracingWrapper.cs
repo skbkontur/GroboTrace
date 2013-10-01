@@ -28,17 +28,17 @@ namespace GroboTrace
 
         private static Tuple<Type, Func<object, object>> GetWrapperTypeAndCreator(Type implementationType)
         {
-            var wrapperTypeAndCreator = (Tuple<Type, Func<object, object>>)wrapperTypes[implementationType];
+            var wrapperTypeAndCreator = (Tuple<Type, Func<object, object>>)wrappers[implementationType];
             if(wrapperTypeAndCreator == null)
             {
-                lock(wrapperTypesLock)
+                lock(wrappersLock)
                 {
-                    wrapperTypeAndCreator = (Tuple<Type, Func<object, object>>)wrapperTypes[implementationType];
+                    wrapperTypeAndCreator = (Tuple<Type, Func<object, object>>)wrappers[implementationType];
                     if(wrapperTypeAndCreator == null)
                     {
                         var wrapperType = WrapInternal(implementationType);
                         wrapperTypeAndCreator = new Tuple<Type, Func<object, object>>(wrapperType, EmitWrapperCreator(wrapperType));
-                        wrapperTypes[implementationType] = wrapperTypeAndCreator;
+                        wrappers[implementationType] = wrapperTypeAndCreator;
                     }
                 }
             }
@@ -58,36 +58,51 @@ namespace GroboTrace
 
         private static Type WrapInternal(Type implementationType)
         {
-            var @public = IsPublic(implementationType);
             TypeBuilder typeBuilder = module.DefineType(implementationType + "_Wrapper_" + Guid.NewGuid(), TypeAttributes.Public | TypeAttributes.Class);
             FieldBuilder implField = typeBuilder.DefineField("impl", typeof(object), FieldAttributes.Private | FieldAttributes.InitOnly);
             BuildConstructor(typeBuilder, implField);
             var fieldsValues = new List<KeyValuePair<FieldBuilder, object>>();
-            var builtMethods = new HashSet<MethodInfo>();
-            foreach(var interfaceType in implementationType.GetInterfaces())
+            if(implementationType.IsInterface)
             {
-                if(!IsPublic(interfaceType))
-                    continue;
-                var interfaceMap = implementationType.GetInterfaceMap(interfaceType);
-                for(int index = 0; index < interfaceMap.InterfaceMethods.Length; ++index)
+                foreach(var interfaceType in new[] {implementationType}.Concat(implementationType.GetInterfaces()))
                 {
-                    builtMethods.Add(interfaceMap.TargetMethods[index]);
-                    var methodBuilder = BuildMethod(typeBuilder, interfaceMap.TargetMethods[index], interfaceMap.InterfaceMethods[index], implField, fieldsValues);
-                    typeBuilder.DefineMethodOverride(methodBuilder, interfaceMap.InterfaceMethods[index]);
-                }
-                typeBuilder.AddInterfaceImplementation(interfaceType);
-            }
-            if(@public)
-            {
-                var methods = implementationType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
-                foreach(var method in methods)
-                {
-                    if(builtMethods.Contains(method))
+                    if(!IsPublic(interfaceType))
                         continue;
-                    BuildMethod(typeBuilder, method, method, implField, fieldsValues);
+                    foreach(var method in interfaceType.GetMethods())
+                    {
+                        var methodBuilder = BuildMethod(typeBuilder, method, method, implField, fieldsValues);
+                        typeBuilder.DefineMethodOverride(methodBuilder, method);
+                    }
+                    typeBuilder.AddInterfaceImplementation(interfaceType);
                 }
             }
-
+            else
+            {
+                var builtMethods = new HashSet<MethodInfo>();
+                foreach(var interfaceType in implementationType.GetInterfaces())
+                {
+                    if(!IsPublic(interfaceType))
+                        continue;
+                    var interfaceMap = implementationType.GetInterfaceMap(interfaceType);
+                    for(int index = 0; index < interfaceMap.InterfaceMethods.Length; ++index)
+                    {
+                        builtMethods.Add(interfaceMap.TargetMethods[index]);
+                        var methodBuilder = BuildMethod(typeBuilder, interfaceMap.TargetMethods[index], interfaceMap.InterfaceMethods[index], implField, fieldsValues);
+                        typeBuilder.DefineMethodOverride(methodBuilder, interfaceMap.InterfaceMethods[index]);
+                    }
+                    typeBuilder.AddInterfaceImplementation(interfaceType);
+                }
+                if(IsPublic(implementationType) && !implementationType.IsInterface)
+                {
+                    var methods = implementationType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+                    foreach(var method in methods)
+                    {
+                        if(builtMethods.Contains(method))
+                            continue;
+                        BuildMethod(typeBuilder, method, method, implField, fieldsValues);
+                    }
+                }
+            }
             typeBuilder.DefineMethodOverride(BuildUnWrapMethod(typeBuilder, implField), classWrapperUnWrapMethod);
             typeBuilder.AddInterfaceImplementation(typeof(IClassWrapper));
 
@@ -183,7 +198,8 @@ namespace GroboTrace
         private static MethodBuilder BuildMethod(TypeBuilder typeBuilder, MethodInfo implementationMethod, MethodInfo abstractionMethod, FieldInfo implField, List<KeyValuePair<FieldBuilder, object>> fieldsValues)
         {
             var parameters = implementationMethod.GetParameters();
-            var method = typeBuilder.DefineMethod(implementationMethod.Name, implementationMethod.IsVirtual ? MethodAttributes.Public | MethodAttributes.Virtual : MethodAttributes.Public, CallingConventions.HasThis, implementationMethod.ReturnType,
+            var returnType = implementationMethod.ReturnType;
+            var method = typeBuilder.DefineMethod(implementationMethod.Name, implementationMethod.IsVirtual ? MethodAttributes.Public | MethodAttributes.Virtual : MethodAttributes.Public, CallingConventions.HasThis, returnType,
                                                   implementationMethod.ReturnParameter == null ? null : implementationMethod.ReturnParameter.GetRequiredCustomModifiers(),
                                                   implementationMethod.ReturnParameter == null ? null : implementationMethod.ReturnParameter.GetOptionalCustomModifiers(),
                                                   parameters.Select(parameter => parameter.ParameterType).ToArray(),
@@ -232,7 +248,7 @@ namespace GroboTrace
 
             var il = method.GetILGenerator();
 
-            LocalBuilder result = implementationMethod.ReturnType == typeof(void) ? null : il.DeclareLocal(implementationMethod.ReturnType);
+            LocalBuilder result = returnType == typeof(void) ? null : il.DeclareLocal(returnType);
             var startTicks = il.DeclareLocal(typeof(long));
             var endTicks = il.DeclareLocal(typeof(long));
 
@@ -258,6 +274,17 @@ namespace GroboTrace
             for(int i = 0; i < parameters.Length; ++i)
                 il.Emit(OpCodes.Ldarg_S, i + 1); // stack: [impl, parameters]
             il.EmitCall(OpCodes.Callvirt, abstractionMethod, null); // impl.method(parameters)
+
+            if(returnType.IsInterface)
+            {
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Isinst, typeof(IClassWrapper));
+                var wrappedLabel = il.DefineLabel();
+                il.Emit(OpCodes.Brtrue, wrappedLabel);
+                il.Emit(OpCodes.Newobj, Wrap(returnType).GetConstructors().Single());
+                il.MarkLabel(wrappedLabel);
+            }
+
             if(result != null)
                 il.Emit(OpCodes.Stloc_S, result); // result = impl.method(parameters)
 
@@ -352,8 +379,8 @@ namespace GroboTrace
             return (Func<long>)dynamicMethod.CreateDelegate(typeof(Func<long>));
         }
 
-        private static readonly Hashtable wrapperTypes = new Hashtable();
-        private static readonly object wrapperTypesLock = new object();
+        private static readonly Hashtable wrappers = new Hashtable();
+        private static readonly object wrappersLock = new object();
 
         private static readonly AssemblyBuilder assembly = AppDomain.CurrentDomain.DefineDynamicAssembly(new AssemblyName(WrappersAssemblyName), AssemblyBuilderAccess.Run);
         private static readonly ModuleBuilder module = assembly.DefineDynamicModule(Guid.NewGuid().ToString());
