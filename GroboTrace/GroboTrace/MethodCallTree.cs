@@ -13,12 +13,12 @@ namespace GroboTrace
             startTicks = TracingWrapper.GetTicks();
         }
 
-        public void StartMethod(long methodHandle, MethodInfo method)
+        public void StartMethod(ulong methodHandle, MethodInfo method)
         {
             current = current.StartMethod(methodHandle, method);
         }
 
-        public void FinishMethod(long methodHandle, long elsapsed)
+        public void FinishMethod(ulong methodHandle, long elsapsed)
         {
             current = current.FinishMethod(methodHandle, elsapsed);
         }

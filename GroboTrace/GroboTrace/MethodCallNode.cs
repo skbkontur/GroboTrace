@@ -7,18 +7,18 @@ namespace GroboTrace
 {
     internal class MethodCallNode
     {
-        public MethodCallNode(MethodCallNode parent, long handle, MethodInfo method)
+        public MethodCallNode(MethodCallNode parent, ulong handle, MethodInfo method)
         {
             this.parent = parent;
             this.handle = handle;
             Method = method;
-            handles = new long[1];
+            handles = new ulong[1];
             children = new MethodCallNode[1];
         }
 
-        public MethodCallNode StartMethod(long methodHandle, MethodInfo method)
+        public MethodCallNode StartMethod(ulong methodHandle, MethodInfo method)
         {
-            var index = (int)(methodHandle % handles.Length);
+            var index = methodHandle % (uint)handles.Length;
             if(handles[index] == methodHandle)
                 return children[index];
             if(handles[index] != 0)
@@ -34,7 +34,7 @@ namespace GroboTrace
             return children[index];
         }
 
-        public MethodCallNode FinishMethod(long methodHandle, long elapsed)
+        public MethodCallNode FinishMethod(ulong methodHandle, long elapsed)
         {
             if(methodHandle != handle)
                 throw new InvalidOperationException();
@@ -55,11 +55,11 @@ namespace GroboTrace
                             Percent = totalTicks == 0 ? 0.0 : Ticks * 100.0 / totalTicks
                         },
                     Children = Children.Select(child =>
-                                                   {
-                                                       var childStats = child.GetStats(totalTicks);
-                                                       return childStats;
-                                                   }).OrderByDescending(stats => stats.MethodStats.Ticks).
-                        ToArray()
+                        {
+                            var childStats = child.GetStats(totalTicks);
+                            return childStats;
+                        }).OrderByDescending(stats => stats.MethodStats.Ticks).
+                                        ToArray()
                 };
         }
 
@@ -96,16 +96,16 @@ namespace GroboTrace
 
         public IEnumerable<MethodCallNode> Children { get { return children.Where(node => node != null && node.Calls > 0); } }
 
-        private int Rebuild(long newHandle)
+        private uint Rebuild(ulong newHandle)
         {
-            var values = new List<long>();
+            var values = new List<ulong>();
             for(int i = 0; i < handles.Length; ++i)
             {
                 if(handles[i] != 0)
                     values.Add(handles[i]);
             }
             values.Add(newHandle);
-            int length = handles.Length;
+            var length = (uint)handles.Length;
             while(true)
             {
                 ++length;
@@ -113,7 +113,7 @@ namespace GroboTrace
                 bool ok = true;
                 for(int i = 0; i < values.Count; ++i)
                 {
-                    var index = (int)(values[i] % length);
+                    var index = values[i] % length;
                     if(was[index])
                     {
                         ok = false;
@@ -123,7 +123,7 @@ namespace GroboTrace
                 }
                 if(ok) break;
             }
-            var newHandles = new long[length];
+            var newHandles = new ulong[length];
             var newChildren = new MethodCallNode[length];
             for(int i = 0; i < handles.Length; ++i)
             {
@@ -136,12 +136,12 @@ namespace GroboTrace
             }
             handles = newHandles;
             children = newChildren;
-            return (int)(newHandle % length);
+            return (uint)(newHandle % length);
         }
 
-        private readonly long handle;
+        private readonly ulong handle;
         private readonly MethodCallNode parent;
         private MethodCallNode[] children;
-        private long[] handles;
+        private ulong[] handles;
     }
 }
