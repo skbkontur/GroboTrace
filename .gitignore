@@ -4,5 +4,7 @@ obj
 [Rr]elease
 *.user
 *.suo
+GroboTrace.dll
+GroboTrace.pdb
 _ReSharper.GroboTrace
 _ReSharper.GroboTrace2010
