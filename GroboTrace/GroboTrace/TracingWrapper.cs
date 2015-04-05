@@ -56,7 +56,7 @@ namespace GroboTrace
 
         public static MethodInfo GetMethod(Type type, long moduleHandle, int methodToken)
         {
-            MethodInfo[] methods = type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var methods = type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             return methods.Single(method => moduleRuntimeHandleGetter(method.Module.ModuleHandle) == moduleHandle && method.MetadataToken == methodToken);
         }
 
@@ -69,7 +69,7 @@ namespace GroboTrace
             var wrapperType = (Type)wrapperTypes[implementationType];
             if(wrapperType == null)
             {
-                lock(wrappersTypesLock)
+                lock(lockObject)
                 {
                     wrapperType = (Type)wrapperTypes[implementationType];
                     if(wrapperType == null)
@@ -84,7 +84,9 @@ namespace GroboTrace
 
         private Type WrapInternal(Type implementationType)
         {
-            TypeBuilder typeBuilder = module.DefineType(implementationType + "_Wrapper_" + Guid.NewGuid(), TypeAttributes.Public | TypeAttributes.Class);
+            var typeBuilder = module.DefineType(implementationType + "_Wrapper_" + Guid.NewGuid(), TypeAttributes.Public | TypeAttributes.Class);
+
+            wrapperTypes[implementationType] = typeBuilder;
 
             Type[] genericArguments = null;
             GenericTypeParameterBuilder[] genericParameters = null;
@@ -92,16 +94,17 @@ namespace GroboTrace
             {
                 genericArguments = implementationType.GetGenericArguments();
                 genericParameters = typeBuilder.DefineGenericParameters(genericArguments.Select(type => "Z" + type.Name).ToArray());
-                for(int index = 0; index < genericArguments.Length; index++)
+                for(var index = 0; index < genericArguments.Length; index++)
                 {
                     var genericArgument = genericArguments[index];
                     genericParameters[index].SetGenericParameterAttributes(genericArgument.GenericParameterAttributes & ~(GenericParameterAttributes.Contravariant | GenericParameterAttributes.Covariant));
-                    genericParameters[index].SetBaseTypeConstraint(Refine(genericArgument.BaseType, genericArguments, genericParameters));
-                    genericParameters[index].SetInterfaceConstraints(GetUnique(genericArgument.GetInterfaces(), genericArgument.BaseType == null ? new Type[0] : genericArgument.BaseType.GetInterfaces()).Select(type => Refine(type, genericArguments, genericParameters)).ToArray());
+                    if(genericArgument.BaseType != null && genericArgument.BaseType != typeof(object))
+                        genericParameters[index].SetBaseTypeConstraint(Refine(genericArgument.BaseType, genericArguments, genericParameters));
+                    genericParameters[index].SetInterfaceConstraints(genericArgument.GetGenericParameterConstraints().Select(type => Refine(type, genericArguments, genericParameters)).ToArray() /*GetUnique(genericArgument.GetInterfaces(), genericArgument.BaseType == null ? new Type[0] : genericArgument.BaseType.GetInterfaces()).Select(type => Refine(type, genericArguments, genericParameters)).ToArray()*/);
                 }
             }
-            FieldBuilder implField = typeBuilder.DefineField("impl", typeof(object), FieldAttributes.Private | FieldAttributes.InitOnly);
-            BuildConstructor(typeBuilder, implField);
+            var implField = typeBuilder.DefineField("impl", typeof(object), FieldAttributes.Private | FieldAttributes.InitOnly);
+            wrapperConstructors[implementationType] = BuildConstructor(typeBuilder, implField);
             var typeInitializer = typeBuilder.DefineTypeInitializer();
             var il = new GroboIL(typeInitializer);
 //            var fieldsValues = new List<KeyValuePair<FieldBuilder, object>>();
@@ -129,7 +132,7 @@ namespace GroboTrace
                         continue;
                     var refinedInterfaceType = Refine(interfaceType, genericArguments, genericParameters);
                     var interfaceMap = implementationType.GetInterfaceMap(interfaceType);
-                    for(int index = 0; index < interfaceMap.InterfaceMethods.Length; ++index)
+                    for(var index = 0; index < interfaceMap.InterfaceMethods.Length; ++index)
                     {
                         builtMethods.Add(interfaceMap.TargetMethods[index]);
                         var methodBuilder = BuildMethod(typeBuilder, interfaceMap.TargetMethods[index], interfaceMap.InterfaceMethods[index], genericArguments, genericParameters, implField, il);
@@ -153,7 +156,9 @@ namespace GroboTrace
 
             il.Ret();
 
-            return typeBuilder.CreateType();
+            var result = typeBuilder.CreateType();
+            wrapperConstructors[implementationType] = result.GetConstructor(new[] {typeof(object)});
+            return result;
         }
 
         private static bool IsPublic(Type type)
@@ -197,7 +202,7 @@ namespace GroboTrace
             }
             while(true)
             {
-                bool end = true;
+                var end = true;
                 foreach(var type in hashSet.ToArray())
                 {
                     var children = type.GetInterfaces();
@@ -225,7 +230,7 @@ namespace GroboTrace
             return method;
         }
 
-        private static Type Refine(Type type, Type[] genericArguments, GenericTypeParameterBuilder[] genericParameters)
+        private static Type Refine(Type type, Type[] genericArguments, Type[] genericParameters)
         {
             if(type != null && type.IsGenericType)
                 return type.GetGenericTypeDefinition().MakeGenericType(type.GetGenericArguments().Select(t => Refine(t, genericArguments, genericParameters)).ToArray());
@@ -262,15 +267,26 @@ namespace GroboTrace
             {
                 method = typeBuilder.DefineMethod(implementationMethod.Name, implementationMethod.IsVirtual ? MethodAttributes.Public | MethodAttributes.Virtual : MethodAttributes.Public, CallingConventions.HasThis);
                 var genericArguments = implementationMethod.GetGenericArguments();
-                var genericParameters = method.DefineGenericParameters(genericArguments.Select(type => type.Name).ToArray());
+                var genericParameters = method.DefineGenericParameters(genericArguments.Select(type => type.Name + "_ForWrapper").ToArray());
                 var allGenericArguments = parentGenericArguments == null ? genericArguments : parentGenericArguments.Concat(genericArguments).ToArray();
-                var allGenericParameters = parentGenericParameters == null ? genericParameters : parentGenericParameters.Concat(genericParameters).ToArray();
-                for(int index = 0; index < genericArguments.Length; index++)
+                Type[] allGenericParameters = parentGenericParameters == null ? genericParameters : parentGenericParameters.Concat(genericParameters).ToArray();
+                if(implementationMethod.DeclaringType != null && implementationMethod.DeclaringType.IsGenericType)
+                {
+                    allGenericArguments = allGenericArguments.Concat(implementationMethod.DeclaringType.GetGenericTypeDefinition().GetGenericArguments()).ToArray();
+                    allGenericParameters = allGenericParameters.Concat(implementationMethod.DeclaringType.GetGenericArguments()).ToArray();
+                }
+                for(var index = 0; index < genericArguments.Length; index++)
                 {
                     var genericArgument = genericArguments[index];
                     genericParameters[index].SetGenericParameterAttributes(genericArgument.GenericParameterAttributes);
-                    genericParameters[index].SetBaseTypeConstraint(Refine(genericArgument.BaseType, allGenericArguments, allGenericParameters));
-                    genericParameters[index].SetInterfaceConstraints(GetUnique(genericArgument.GetInterfaces(), genericArgument.BaseType == null ? new Type[0] : genericArgument.BaseType.GetInterfaces()).Select(type => Refine(type, allGenericArguments, allGenericParameters)).ToArray());
+                    if(genericArgument.BaseType != null && genericArgument.BaseType != typeof(object))
+                    {
+                        var baseTypeConstraint = Refine(genericArgument.BaseType, allGenericArguments, allGenericParameters);
+                        if(!baseTypeConstraint.IsInterface)
+                            genericParameters[index].SetBaseTypeConstraint(baseTypeConstraint);
+                    }
+                    var interfaceConstraints = genericArgument.GetGenericParameterConstraints().Select(type => Refine(type, allGenericArguments, allGenericParameters)).ToArray();
+                    genericParameters[index].SetInterfaceConstraints(interfaceConstraints /*GetUnique(genericArgument.GetInterfaces(), genericArgument.BaseType == null ? new Type[0] : genericArgument.BaseType.GetInterfaces()).Select(type => Refine(type, allGenericArguments, allGenericParameters)).ToArray()*/);
                 }
                 returnType = Refine(implementationMethod.ReturnType, allGenericArguments, allGenericParameters);
                 parameterTypes = implementationMethod.GetParameters().Select(info => Refine(info.ParameterType, allGenericArguments, allGenericParameters)).ToArray();
@@ -305,9 +321,10 @@ namespace GroboTrace
                 method.SetCustomAttribute(new CustomAttributeBuilder(customAttribute.Constructor, constructorArgs, properties.ToArray(), propertyValues.ToArray(), fields.ToArray(), fieldValues.ToArray()));
             }
 
-            FieldBuilder methodField = typeBuilder.DefineField("method_" + implementationMethod.Name + "_" + Guid.NewGuid(), typeof(MethodInfo), FieldAttributes.Private | FieldAttributes.InitOnly | FieldAttributes.Static);
-            FieldBuilder methodHandleField = typeBuilder.DefineField("methodHandle_" + implementationMethod.Name + "_" + Guid.NewGuid(), typeof(long), FieldAttributes.Private | FieldAttributes.InitOnly | FieldAttributes.Static);
+            var methodField = typeBuilder.DefineField("method_" + implementationMethod.Name + "_" + Guid.NewGuid(), typeof(MethodInfo), FieldAttributes.Private | FieldAttributes.InitOnly | FieldAttributes.Static);
+            var methodHandleField = typeBuilder.DefineField("methodHandle_" + implementationMethod.Name + "_" + Guid.NewGuid(), typeof(long), FieldAttributes.Private | FieldAttributes.InitOnly | FieldAttributes.Static);
 
+/*
             if(!implementationMethod.IsGenericMethod || !reflectedType.IsGenericType)
             {
                 typeInitializerIl.Ldtoken(implementationMethod);
@@ -316,20 +333,21 @@ namespace GroboTrace
             }
             else
             {
-                // todo ldtoken для generic-метода в generic-классе почему-то выбрасывает BadImageFormatException, может быть, баг в .NET
-                typeInitializerIl.Ldtoken(reflectedType);
-                typeInitializerIl.Call(typeFromTypeHandleMethod);
-                typeInitializerIl.Ldc_I8(moduleRuntimeHandleGetter(implementationMethod.Module.ModuleHandle));
-                typeInitializerIl.Ldc_I4(implementationMethod.MetadataToken);
-                typeInitializerIl.Call(methodGetter);
-            }
+*/
+            // todo ldtoken для generic-метода в generic-классе почему-то выбрасывает BadImageFormatException, может быть, баг в .NET
+            typeInitializerIl.Ldtoken(reflectedType);
+            typeInitializerIl.Call(typeFromTypeHandleMethod);
+            typeInitializerIl.Ldc_I8(moduleRuntimeHandleGetter(implementationMethod.Module.ModuleHandle));
+            typeInitializerIl.Ldc_I4(implementationMethod.MetadataToken);
+            typeInitializerIl.Call(methodGetter);
+//            }
             typeInitializerIl.Dup();
             typeInitializerIl.Stfld(methodField);
             typeInitializerIl.Call(methodHashKeyGetter);
             typeInitializerIl.Stfld(methodHandleField);
 
             var il = method.GetILGenerator();
-            LocalBuilder result = returnType == typeof(void) ? null : il.DeclareLocal(returnType);
+            var result = returnType == typeof(void) ? null : il.DeclareLocal(returnType);
             var startTicks = il.DeclareLocal(typeof(long));
             var endTicks = il.DeclareLocal(typeof(long));
 
@@ -347,7 +365,7 @@ namespace GroboTrace
 
             il.Emit(OpCodes.Ldarg_0); // stack: [this]
             il.Emit(OpCodes.Ldfld, implField); // stack: [impl]
-            for(int i = 0; i < parameterTypes.Length; ++i)
+            for(var i = 0; i < parameterTypes.Length; ++i)
                 il.Emit(OpCodes.Ldarg_S, i + 1); // stack: [impl, parameters]
             il.EmitCall(OpCodes.Callvirt, abstractionMethod, null); // impl.method(parameters)
 
@@ -360,7 +378,8 @@ namespace GroboTrace
                     il.Emit(OpCodes.Isinst, typeof(IClassWrapper));
                     var wrappedLabel = il.DefineLabel();
                     il.Emit(OpCodes.Brtrue, wrappedLabel);
-                    var constructor = !wrapperType.ContainsGenericParameters ? wrapperType.GetConstructors().Single() : TypeBuilder.GetConstructor(wrapperType, wrapperType.GetGenericTypeDefinition().GetConstructors().Single());
+                    var wrapperConstructor = (ConstructorInfo)wrapperConstructors[returnType.IsGenericType ? returnType.GetGenericTypeDefinition() : returnType];
+                    var constructor = !wrapperType.ContainsGenericParameters ? wrapperConstructor : TypeBuilder.GetConstructor(wrapperType, wrapperConstructor);
                     il.Emit(OpCodes.Newobj, constructor);
                     il.MarkLabel(wrappedLabel);
                 }
@@ -398,7 +417,7 @@ namespace GroboTrace
             return method;
         }
 
-        private static void BuildConstructor(TypeBuilder typeBuilder, FieldInfo implField)
+        private static ConstructorInfo BuildConstructor(TypeBuilder typeBuilder, FieldInfo implField)
         {
             var constructor = typeBuilder.DefineConstructor(MethodAttributes.Public, CallingConventions.HasThis, new[] {implField.FieldType});
             var il = constructor.GetILGenerator();
@@ -406,6 +425,7 @@ namespace GroboTrace
             il.Emit(OpCodes.Ldarg_1); // stack: [impl]
             il.Emit(OpCodes.Stfld, implField); // this.implField = impl
             il.Emit(OpCodes.Ret);
+            return constructor;
         }
 
         [DllImport("kernel32.dll")]
@@ -419,7 +439,7 @@ namespace GroboTrace
 
         private static IntPtr GetTicksReaderAddress()
         {
-            string resourceName = string.Format("rdtsc{0}.dll", IntPtr.Size == 4 ? "32" : "64");
+            var resourceName = string.Format("rdtsc{0}.dll", IntPtr.Size == 4 ? "32" : "64");
             var rdtscDll = Assembly.GetExecutingAssembly().GetManifestResourceStream("GroboTrace.Rdtsc." + resourceName);
             if(rdtscDll != null)
             {
@@ -429,18 +449,18 @@ namespace GroboTrace
                     var directoryName = AppDomain.CurrentDomain.BaseDirectory; //Path.GetDirectoryName(new Uri(Assembly.GetExecutingAssembly().CodeBase).LocalPath);
                     if(string.IsNullOrEmpty(directoryName))
                         throw new InvalidOperationException("Unable to obtain binaries directory");
-                    string rdtscDllFileName = Path.Combine(directoryName, string.Format("rdtsc{0}_{1}.dll", IntPtr.Size == 4 ? "32" : "64", Guid.NewGuid().ToString("N")));
+                    var rdtscDllFileName = Path.Combine(directoryName, string.Format("rdtsc{0}_{1}.dll", IntPtr.Size == 4 ? "32" : "64", Guid.NewGuid().ToString("N")));
                     File.WriteAllBytes(rdtscDllFileName, rdtscDllContent);
-                    IntPtr rdtscDllModuleHandle = LoadLibrary(rdtscDllFileName);
+                    var rdtscDllModuleHandle = LoadLibrary(rdtscDllFileName);
                     if(rdtscDllModuleHandle != IntPtr.Zero)
                     {
-                        IntPtr rdtscProcAddress = GetProcAddress(rdtscDllModuleHandle, "ReadTimeStampCounter");
+                        var rdtscProcAddress = GetProcAddress(rdtscDllModuleHandle, "ReadTimeStampCounter");
                         if(rdtscProcAddress != IntPtr.Zero)
                             return rdtscProcAddress;
                     }
                 }
             }
-            IntPtr kernel32ModuleHandle = GetModuleHandle("kernel32.dll");
+            var kernel32ModuleHandle = GetModuleHandle("kernel32.dll");
             return kernel32ModuleHandle == IntPtr.Zero ? IntPtr.Zero : GetProcAddress(kernel32ModuleHandle, "QueryPerformanceCounter");
         }
 
@@ -479,10 +499,11 @@ namespace GroboTrace
         private readonly TracingWrapperConfigurator configurator;
 
         private static readonly AssemblyBuilder assembly = AppDomain.CurrentDomain.DefineDynamicAssembly(new AssemblyName(WrappersAssemblyName), AssemblyBuilderAccess.RunAndSave);
-        private readonly ModuleBuilder module = assembly.DefineDynamicModule("Wrappers_" + Guid.NewGuid() /*, "zzz.dll"*/);
+        private readonly ModuleBuilder module = assembly.DefineDynamicModule("Wrappers_" + Guid.NewGuid() /* , "wrappers.dll"*/);
 
         private readonly Hashtable wrapperTypes = new Hashtable();
-        private readonly object wrappersTypesLock = new object();
+        private readonly Hashtable wrapperConstructors = new Hashtable();
+        private readonly object lockObject = new object();
 
         private static readonly MethodInfo methodHashKeyGetter = HackHelpers.GetMethodDefinition<MethodInfo>(method => GetMethodHashKey(method));
         private static readonly MethodInfo methodGetter = HackHelpers.GetMethodDefinition<Type>(type => GetMethod(type, 0, 0));

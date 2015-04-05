@@ -46,6 +46,50 @@ namespace Tests
             Console.WriteLine(enumerator.MoveNext());
         }
 
+        [Test]
+        public void Test()
+        {
+            Type type;
+            tracingWrapper.TryWrap(typeof(IZzz<int>), out type);
+            var zzz = (IZzz<int>)Activator.CreateInstance(type, new object[] {new Zzz<int>(new Qzz<int>())});
+            var qzz = zzz.GetQzz(0);
+            var zzz2 = qzz.GetZzz(0);
+            Console.WriteLine(zzz2.ToString());
+        }
+
+        public interface IZzz<T>
+        {
+            IQzz<T> GetQzz(T t);
+        }
+
+        public interface IQzz<T>
+        {
+            IZzz<T> GetZzz(T x);
+        }
+
+        public class Zzz<T> : IZzz<T>
+        {
+            private readonly Qzz<T> qzz;
+
+            public Zzz(Qzz<T> qzz)
+            {
+                this.qzz = qzz;
+            }
+
+            public IQzz<T> GetQzz(T t)
+            {
+                return qzz;
+            }
+        }
+
+        public class Qzz<T> : IQzz<T>
+        {
+            public IZzz<T> GetZzz(T x)
+            {
+                return new Zzz<T>(this);
+            }
+        }
+
         public class EnumerableWrapper<T> : IEnumerable<T>
         {
             public EnumerableWrapper(IEnumerable<T> enumerable)
