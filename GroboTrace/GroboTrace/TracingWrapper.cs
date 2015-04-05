@@ -379,7 +379,12 @@ namespace GroboTrace
                     var wrappedLabel = il.DefineLabel();
                     il.Emit(OpCodes.Brtrue, wrappedLabel);
                     var wrapperConstructor = (ConstructorInfo)wrapperConstructors[returnType.IsGenericType ? returnType.GetGenericTypeDefinition() : returnType];
-                    var constructor = !wrapperType.ContainsGenericParameters ? wrapperConstructor : TypeBuilder.GetConstructor(wrapperType, wrapperConstructor);
+                    ConstructorInfo constructor;
+                    if(wrapperType.ContainsGenericParameters)
+                        constructor = TypeBuilder.GetConstructor(wrapperType, wrapperConstructor);
+                    else if(returnType.IsGenericType)
+                        constructor = (ConstructorInfo)MethodBase.GetMethodFromHandle(wrapperConstructor.MethodHandle, wrapperType.TypeHandle);
+                    else constructor = wrapperConstructor;
                     il.Emit(OpCodes.Newobj, constructor);
                     il.MarkLabel(wrappedLabel);
                 }

@@ -47,7 +47,7 @@ namespace Tests
         }
 
         [Test]
-        public void Test()
+        public void TestCycle()
         {
             Type type;
             tracingWrapper.TryWrap(typeof(IZzz<int>), out type);
@@ -57,9 +57,33 @@ namespace Tests
             Console.WriteLine(zzz2.ToString());
         }
 
+        [Test]
+        public void Test()
+        {
+            Type type;
+            tracingWrapper.TryWrap(typeof(IA), out type);
+            var a = (IA)Activator.CreateInstance(type, new object[] {new A()});
+            foreach(var x in a.Do())
+                Console.WriteLine(x);
+        }
+
+        public interface IA
+        {
+            IEnumerable<int> Do();
+        }
+
+        public class A : IA
+        {
+            public IEnumerable<int> Do()
+            {
+                yield return 1;
+            }
+        }
+
         public interface IZzz<T>
         {
             IQzz<T> GetQzz(T t);
+            IEnumerable<int> Qxx();
         }
 
         public interface IQzz<T>
@@ -79,6 +103,11 @@ namespace Tests
             public IQzz<T> GetQzz(T t)
             {
                 return qzz;
+            }
+
+            public IEnumerable<int> Qxx()
+            {
+                yield return 1;
             }
         }
 
