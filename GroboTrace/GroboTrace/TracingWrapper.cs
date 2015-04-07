@@ -40,7 +40,7 @@ namespace GroboTrace
                 return true;
             }
             wrapperType = GetWrapperType(implementationType.GetGenericTypeDefinition());
-            wrapperType = wrapperType.MakeGenericType(implementationType.GetGenericArguments()); //implementationType.ContainsGenericParameters ? wrapperType : wrapperType.MakeGenericType(implementationType.GetGenericArguments());
+            wrapperType = wrapperType.MakeGenericType(implementationType.GetGenericArguments());
             return true;
         }
 
@@ -100,55 +100,49 @@ namespace GroboTrace
                     genericParameters[index].SetGenericParameterAttributes(genericArgument.GenericParameterAttributes & ~(GenericParameterAttributes.Contravariant | GenericParameterAttributes.Covariant));
                     if(genericArgument.BaseType != null && genericArgument.BaseType != typeof(object))
                         genericParameters[index].SetBaseTypeConstraint(Refine(genericArgument.BaseType, genericArguments, genericParameters));
-                    genericParameters[index].SetInterfaceConstraints(genericArgument.GetGenericParameterConstraints().Select(type => Refine(type, genericArguments, genericParameters)).ToArray() /*GetUnique(genericArgument.GetInterfaces(), genericArgument.BaseType == null ? new Type[0] : genericArgument.BaseType.GetInterfaces()).Select(type => Refine(type, genericArguments, genericParameters)).ToArray()*/);
+                    genericParameters[index].SetInterfaceConstraints(genericArgument.GetGenericParameterConstraints().Select(type => Refine(type, genericArguments, genericParameters)).ToArray());
                 }
             }
             var implField = typeBuilder.DefineField("impl", typeof(object), FieldAttributes.Private | FieldAttributes.InitOnly);
             wrapperConstructors[implementationType] = BuildConstructor(typeBuilder, implField);
             var typeInitializer = typeBuilder.DefineTypeInitializer();
             var il = new GroboIL(typeInitializer);
-//            var fieldsValues = new List<KeyValuePair<FieldBuilder, object>>();
             if(implementationType.IsInterface)
             {
-                foreach(var interfaceType in new[] {implementationType}.Concat(implementationType.GetInterfaces()))
+                var interfaces = new[] {implementationType}.Concat(implementationType.GetInterfaces()).Where(IsPublic).ToArray();
+                foreach(var interfaCe in interfaces)
+                    typeBuilder.AddInterfaceImplementation(Refine(interfaCe, genericArguments, genericParameters));
+                foreach(var interfaceType in interfaces)
                 {
-                    if(!IsPublic(interfaceType))
-                        continue;
-                    var refinedInterfaceType = Refine(interfaceType, genericArguments, genericParameters);
                     foreach(var method in interfaceType.GetMethods())
                     {
                         var methodBuilder = BuildMethod(typeBuilder, method, method, genericArguments, genericParameters, implField, il);
                         typeBuilder.DefineMethodOverride(methodBuilder, method);
                     }
-                    typeBuilder.AddInterfaceImplementation(refinedInterfaceType);
                 }
             }
             else
             {
                 var builtMethods = new HashSet<MethodInfo>();
-                foreach(var interfaceType in implementationType.GetInterfaces())
+                var interfaces = implementationType.GetInterfaces().Where(IsPublic).ToArray();
+                foreach(var interfaCe in interfaces)
+                    typeBuilder.AddInterfaceImplementation(Refine(interfaCe, genericArguments, genericParameters));
+                foreach(var interfaceMap in interfaces.Select(implementationType.GetInterfaceMap))
                 {
-                    if(!IsPublic(interfaceType))
-                        continue;
-                    var refinedInterfaceType = Refine(interfaceType, genericArguments, genericParameters);
-                    var interfaceMap = implementationType.GetInterfaceMap(interfaceType);
                     for(var index = 0; index < interfaceMap.InterfaceMethods.Length; ++index)
                     {
-                        builtMethods.Add(interfaceMap.TargetMethods[index]);
-                        var methodBuilder = BuildMethod(typeBuilder, interfaceMap.TargetMethods[index], interfaceMap.InterfaceMethods[index], genericArguments, genericParameters, implField, il);
-                        typeBuilder.DefineMethodOverride(methodBuilder, interfaceMap.InterfaceMethods[index]);
+                        var targetMethod = interfaceMap.TargetMethods[index];
+                        var interfaceMethod = interfaceMap.InterfaceMethods[index];
+                        builtMethods.Add(targetMethod);
+                        var methodBuilder = BuildMethod(typeBuilder, targetMethod, interfaceMethod, genericArguments, genericParameters, implField, il);
+                        typeBuilder.DefineMethodOverride(methodBuilder, interfaceMethod);
                     }
-                    typeBuilder.AddInterfaceImplementation(refinedInterfaceType);
                 }
                 if(IsPublic(implementationType) && !implementationType.IsInterface)
                 {
                     var methods = implementationType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
-                    foreach(var method in methods)
-                    {
-                        if(builtMethods.Contains(method))
-                            continue;
+                    foreach(var method in methods.Where(method => !builtMethods.Contains(method)))
                         BuildMethod(typeBuilder, method, method, genericArguments, genericParameters, implField, il);
-                    }
                 }
             }
             typeBuilder.DefineMethodOverride(BuildUnWrapMethod(typeBuilder, implField), classWrapperUnWrapMethod);
@@ -170,63 +164,15 @@ namespace GroboTrace
             return type.IsNestedPublic && IsPublic(type.DeclaringType);
         }
 
-//        private static Action GetFieldsInitializer(TypeBuilder typeBuilder, List<KeyValuePair<FieldBuilder, object>> fields)
-//        {
-//            var method = typeBuilder.DefineMethod("Initialize_" + Guid.NewGuid(), MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] {typeof(object[])});
-//            var il = method.GetILGenerator();
-//            var values = new List<object>();
-//            for(int index = 0; index < fields.Count; ++index)
-//            {
-//                il.Emit(OpCodes.Ldnull); // stack: [null]
-//                il.Emit(OpCodes.Ldarg_0); // stack: [null, values]
-//                il.Emit(OpCodes.Ldc_I4, index); // stack: [null, values, index]
-//                il.Emit(OpCodes.Ldelem_Ref); // stack: [null, values[index]]
-//                var field = fields[index].Key;
-//                if(field.FieldType.IsValueType)
-//                    il.Emit(OpCodes.Unbox_Any, field.FieldType);
-//                il.Emit(OpCodes.Stfld, field); // field = values[index]
-//                values.Add(fields[index].Value);
-//            }
-//            il.Emit(OpCodes.Ret);
-//            return () => typeBuilder.GetMethod(method.Name).Invoke(null, new object[] {values.ToArray()});
-//        }
-//
-        private static Type[] GetUnique(Type[] interfaces, Type[] baseInterfaces)
-        {
-            // todo make topsort
-            var hashSet = new HashSet<Type>(interfaces);
-            foreach(var type in baseInterfaces)
-            {
-                if(hashSet.Contains(type))
-                    hashSet.Remove(type);
-            }
-            while(true)
-            {
-                var end = true;
-                foreach(var type in hashSet.ToArray())
-                {
-                    var children = type.GetInterfaces();
-                    foreach(var child in children)
-                    {
-                        if(hashSet.Contains(child))
-                        {
-                            end = false;
-                            hashSet.Remove(child);
-                        }
-                    }
-                }
-                if(end) break;
-            }
-            return hashSet.ToArray();
-        }
-
         private static MethodBuilder BuildUnWrapMethod(TypeBuilder typeBuilder, FieldInfo implField)
         {
-            var method = typeBuilder.DefineMethod("UnWrap", MethodAttributes.Public | MethodAttributes.Virtual, CallingConventions.HasThis, typeof(object), null);
-            var il = method.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0); // stack: [this]
-            il.Emit(OpCodes.Ldfld, implField); // stack: [this.impl]
-            il.Emit(OpCodes.Ret);
+            var method = typeBuilder.DefineMethod("UnWrap", MethodAttributes.Public | MethodAttributes.Virtual, CallingConventions.HasThis, typeof(object), Type.EmptyTypes);
+            using(var il = new GroboIL(method))
+            {
+                il.Ldarg(0); // stack: [this]
+                il.Ldfld(implField); // stack: [this.impl]
+                il.Ret();
+            }
             return method;
         }
 
@@ -240,19 +186,20 @@ namespace GroboTrace
 
         private MethodBuilder BuildMethod(TypeBuilder typeBuilder, MethodInfo implementationMethod, MethodInfo abstractionMethod, Type[] parentGenericArguments, GenericTypeParameterBuilder[] parentGenericParameters, FieldInfo implField, GroboIL typeInitializerIl)
         {
-//            var parameters = implementationMethod.GetParameters();
-//            var returnType = implementationMethod.ReturnType;
-//            var method = typeBuilder.DefineMethod(implementationMethod.Name, implementationMethod.IsVirtual ? MethodAttributes.Public | MethodAttributes.Virtual : MethodAttributes.Public, CallingConventions.HasThis, returnType,
-//                                                  implementationMethod.ReturnParameter == null ? null : implementationMethod.ReturnParameter.GetRequiredCustomModifiers(),
-//                                                  implementationMethod.ReturnParameter == null ? null : implementationMethod.ReturnParameter.GetOptionalCustomModifiers(),
-//                                                  parameters.Select(parameter => parameter.ParameterType).ToArray(),
-//                                                  parameters.Select(parameter => parameter.GetRequiredCustomModifiers()).ToArray(),
-//                                                  parameters.Select(parameter => parameter.GetOptionalCustomModifiers()).ToArray());
             var reflectedType = implementationMethod.ReflectedType;
             if(reflectedType.IsGenericTypeDefinition)
                 reflectedType = reflectedType.MakeGenericType(parentGenericParameters);
             else if(reflectedType.IsGenericType)
                 reflectedType = Refine(reflectedType, parentGenericArguments, parentGenericParameters);
+
+            if(parentGenericArguments != null)
+            {
+                if(abstractionMethod.DeclaringType.IsGenericType)
+                {
+                    var genericTypeDefinition = abstractionMethod.DeclaringType.GetGenericTypeDefinition();
+                    abstractionMethod = TypeBuilder.GetMethod(genericTypeDefinition.MakeGenericType(parentGenericParameters), (MethodInfo)MethodBase.GetMethodFromHandle(abstractionMethod.MethodHandle, genericTypeDefinition.TypeHandle));
+                }
+            }
 
             MethodBuilder method;
             Type returnType;
@@ -286,12 +233,14 @@ namespace GroboTrace
                             genericParameters[index].SetBaseTypeConstraint(baseTypeConstraint);
                     }
                     var interfaceConstraints = genericArgument.GetGenericParameterConstraints().Select(type => Refine(type, allGenericArguments, allGenericParameters)).ToArray();
-                    genericParameters[index].SetInterfaceConstraints(interfaceConstraints /*GetUnique(genericArgument.GetInterfaces(), genericArgument.BaseType == null ? new Type[0] : genericArgument.BaseType.GetInterfaces()).Select(type => Refine(type, allGenericArguments, allGenericParameters)).ToArray()*/);
+                    genericParameters[index].SetInterfaceConstraints(interfaceConstraints);
                 }
                 returnType = Refine(implementationMethod.ReturnType, allGenericArguments, allGenericParameters);
                 parameterTypes = implementationMethod.GetParameters().Select(info => Refine(info.ParameterType, allGenericArguments, allGenericParameters)).ToArray();
                 method.SetReturnType(returnType);
                 method.SetParameters(parameterTypes);
+
+                abstractionMethod = abstractionMethod.MakeGenericMethod(genericParameters);
             }
             foreach(var customAttribute in implementationMethod.GetCustomAttributesData())
             {
@@ -346,90 +295,89 @@ namespace GroboTrace
             typeInitializerIl.Call(methodHashKeyGetter);
             typeInitializerIl.Stfld(methodHandleField);
 
-            var il = method.GetILGenerator();
-            var result = returnType == typeof(void) ? null : il.DeclareLocal(returnType);
-            var startTicks = il.DeclareLocal(typeof(long));
-            var endTicks = il.DeclareLocal(typeof(long));
-
-            il.Emit(OpCodes.Ldsfld, methodField); // stack: [method]
-            il.Emit(OpCodes.Ldsfld, methodHandleField); // stack: [method, methodHandle]
-            il.EmitCall(OpCodes.Call, tracingAnalyzerMethodStartedMethod, null); // TracingAnalyzer.MethodStarted(method, methodHandle)
-            il.Emit(OpCodes.Ldloca_S, startTicks); // stack: [ref startTicks]
-            if(IntPtr.Size == 4)
-                il.Emit(OpCodes.Ldc_I4, ticksReaderAddress.ToInt32());
-            else
-                il.Emit(OpCodes.Ldc_I8, ticksReaderAddress.ToInt64());
-            il.EmitCalli(OpCodes.Calli, CallingConvention.StdCall, typeof(void), new[] {typeof(IntPtr)}); // GetTicks(ref startTicks)
-
-            il.BeginExceptionBlock();
-
-            il.Emit(OpCodes.Ldarg_0); // stack: [this]
-            il.Emit(OpCodes.Ldfld, implField); // stack: [impl]
-            for(var i = 0; i < parameterTypes.Length; ++i)
-                il.Emit(OpCodes.Ldarg_S, i + 1); // stack: [impl, parameters]
-            il.EmitCall(OpCodes.Callvirt, abstractionMethod, null); // impl.method(parameters)
-
-            if(returnType.IsInterface)
+            using(var il = new GroboIL(method))
             {
-                Type wrapperType;
-                if(TryWrap(returnType, out wrapperType))
+                var result = returnType == typeof(void) ? null : il.DeclareLocal(returnType);
+                var startTicks = il.DeclareLocal(typeof(long));
+                var endTicks = il.DeclareLocal(typeof(long));
+
+                il.Ldfld(methodField); // stack: [method]
+                il.Ldfld(methodHandleField); // stack: [method, methodHandle]
+                il.Call(tracingAnalyzerMethodStartedMethod); // TracingAnalyzer.MethodStarted(method, methodHandle)
+                il.Ldloca(startTicks); // stack: [ref startTicks]
+                il.Ldc_IntPtr(ticksReaderAddress);
+                il.Calli(CallingConventions.Standard, typeof(void), new[] {typeof(long).MakeByRefType()}); // GetTicks(ref startTicks)
+
+                il.BeginExceptionBlock();
+
+                il.Ldarg(0); // stack: [this]
+                il.Ldfld(implField); // stack: [impl]
+                il.Castclass(abstractionMethod.DeclaringType);
+                for(var i = 0; i < parameterTypes.Length; ++i)
+                    il.Ldarg(i + 1); // stack: [impl, parameters]
+                il.Call(abstractionMethod); // impl.method(parameters)
+
+                if(returnType.IsInterface)
                 {
-                    il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Isinst, typeof(IClassWrapper));
-                    var wrappedLabel = il.DefineLabel();
-                    il.Emit(OpCodes.Brtrue, wrappedLabel);
-                    var wrapperConstructor = (ConstructorInfo)wrapperConstructors[returnType.IsGenericType ? returnType.GetGenericTypeDefinition() : returnType];
-                    ConstructorInfo constructor;
-                    if(wrapperType.ContainsGenericParameters)
-                        constructor = TypeBuilder.GetConstructor(wrapperType, wrapperConstructor);
-                    else if(returnType.IsGenericType)
-                        constructor = (ConstructorInfo)MethodBase.GetMethodFromHandle(wrapperConstructor.MethodHandle, wrapperType.TypeHandle);
-                    else constructor = wrapperConstructor;
-                    il.Emit(OpCodes.Newobj, constructor);
-                    il.MarkLabel(wrappedLabel);
+                    Type wrapperType;
+                    if(TryWrap(returnType, out wrapperType))
+                    {
+                        il.Dup();
+                        il.Isinst(typeof(IClassWrapper));
+                        var wrappedLabel = il.DefineLabel("wrapped");
+                        il.Brtrue(wrappedLabel);
+                        var wrapperConstructor = (ConstructorInfo)wrapperConstructors[returnType.IsGenericType ? returnType.GetGenericTypeDefinition() : returnType];
+                        ConstructorInfo constructor;
+                        if(wrapperType.ContainsGenericParameters)
+                            constructor = TypeBuilder.GetConstructor(wrapperType, wrapperConstructor);
+                        else if(returnType.IsGenericType)
+                            constructor = (ConstructorInfo)MethodBase.GetMethodFromHandle(wrapperConstructor.MethodHandle, wrapperType.TypeHandle);
+                        else constructor = wrapperConstructor;
+                        il.Newobj(constructor);
+                        il.MarkLabel(wrappedLabel);
+                    }
                 }
+
+                if(result != null)
+                    il.Stloc(result); // result = impl.method(parameters)
+
+                var retLabel = il.DefineLabel("ret");
+                il.Leave(retLabel);
+                il.BeginFinallyBlock();
+
+                il.Ldloca(endTicks); // stack: [ref endTicks]
+                il.Ldc_IntPtr(ticksReaderAddress);
+                il.Calli(CallingConventions.Standard, typeof(void), new[] {typeof(long).MakeByRefType()}); // GetTicks(ref endTicks)
+
+                il.Ldfld(methodField); // stack: [method]
+                il.Ldfld(methodHandleField); // stack: [method, methodHandle]
+
+                il.Ldloc(endTicks); // stack: [method, methodHandle, endTicks]
+                il.Ldloc(startTicks); // stack: [method, methodHandle, endTicks, startTicks]
+                il.Sub(); // stack: [method, methodHandle, endTicks - startTicks = elapsed]
+
+                il.Call(tracingAnalyzerMethodFinishedMethod); // TracingAnalyzer.MethodFinished(method, methodHandle, elapsed)
+
+                il.EndExceptionBlock();
+                il.MarkLabel(retLabel);
+
+                if(result != null)
+                    il.Ldloc(result);
+                il.Ret();
             }
-
-            if(result != null)
-                il.Emit(OpCodes.Stloc_S, result); // result = impl.method(parameters)
-
-            var retLabel = il.DefineLabel();
-            il.Emit(OpCodes.Leave_S, retLabel);
-            il.BeginFinallyBlock();
-
-            il.Emit(OpCodes.Ldloca_S, endTicks); // stack: [ref endTicks]
-            if(IntPtr.Size == 4)
-                il.Emit(OpCodes.Ldc_I4, ticksReaderAddress.ToInt32());
-            else
-                il.Emit(OpCodes.Ldc_I8, ticksReaderAddress.ToInt64());
-            il.EmitCalli(OpCodes.Calli, CallingConvention.StdCall, typeof(void), new[] {typeof(IntPtr)}); // GetTicks(ref endTicks)
-
-            il.Emit(OpCodes.Ldsfld, methodField); // stack: [method]
-            il.Emit(OpCodes.Ldsfld, methodHandleField); // stack: [method, methodHandle]
-
-            il.Emit(OpCodes.Ldloc_S, endTicks); // stack: [method, methodHandle, endTicks]
-            il.Emit(OpCodes.Ldloc_S, startTicks); // stack: [method, methodHandle, endTicks, startTicks]
-            il.Emit(OpCodes.Sub); // stack: [method, methodHandle, endTicks - startTicks = elapsed]
-
-            il.EmitCall(OpCodes.Call, tracingAnalyzerMethodFinishedMethod, null); // TracingAnalyzer.MethodFinished(method, methodHandle, elapsed)
-
-            il.EndExceptionBlock();
-            il.MarkLabel(retLabel);
-
-            if(result != null)
-                il.Emit(OpCodes.Ldloc_S, result);
-            il.Emit(OpCodes.Ret);
             return method;
         }
 
         private static ConstructorInfo BuildConstructor(TypeBuilder typeBuilder, FieldInfo implField)
         {
             var constructor = typeBuilder.DefineConstructor(MethodAttributes.Public, CallingConventions.HasThis, new[] {implField.FieldType});
-            var il = constructor.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0); // stack: [this]
-            il.Emit(OpCodes.Ldarg_1); // stack: [impl]
-            il.Emit(OpCodes.Stfld, implField); // this.implField = impl
-            il.Emit(OpCodes.Ret);
+            using(var il = new GroboIL(constructor))
+            {
+                il.Ldarg(0); // stack: [this]
+                il.Ldarg(1); // stack: [impl]
+                il.Stfld(implField); // this.implField = impl
+                il.Ret();
+            }
             return constructor;
         }
 
@@ -472,16 +420,15 @@ namespace GroboTrace
         private static Func<long> EmitTicksGetter()
         {
             var dynamicMethod = new DynamicMethod("GetTicks_" + Guid.NewGuid(), typeof(long), null, typeof(TracingWrapper));
-            var il = dynamicMethod.GetILGenerator();
-            var ticks = il.DeclareLocal(typeof(long));
-            il.Emit(OpCodes.Ldloca_S, ticks); // stack: [&ticks]
-            if(IntPtr.Size == 4)
-                il.Emit(OpCodes.Ldc_I4, ticksReaderAddress.ToInt32());
-            else
-                il.Emit(OpCodes.Ldc_I8, ticksReaderAddress.ToInt64());
-            il.EmitCalli(OpCodes.Calli, CallingConvention.StdCall, typeof(void), new[] {typeof(IntPtr)});
-            il.Emit(OpCodes.Ldloc_S, ticks);
-            il.Emit(OpCodes.Ret);
+            using(var il = new GroboIL(dynamicMethod))
+            {
+                var ticks = il.DeclareLocal(typeof(long));
+                il.Ldloca(ticks); // stack: [&ticks]
+                il.Ldc_IntPtr(ticksReaderAddress);
+                il.Calli(CallingConventions.Standard, typeof(void), new[] {typeof(long).MakeByRefType()});
+                il.Ldloc(ticks);
+                il.Ret();
+            }
             return (Func<long>)dynamicMethod.CreateDelegate(typeof(Func<long>));
         }
 
@@ -489,15 +436,17 @@ namespace GroboTrace
         {
             var runtimeModuleType = typeof(ModuleHandle).Assembly.GetTypes().Single(type => type.Name == "RuntimeModule");
             var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(long), new[] {typeof(ModuleHandle)}, typeof(TracingWrapper), true);
-            var il = new GroboIL(method);
-            il.Ldarga(0);
-            il.Ldfld(typeof(ModuleHandle).GetField("m_ptr", BindingFlags.Instance | BindingFlags.NonPublic));
-            il.Ldfld(runtimeModuleType.GetField("m_pData", BindingFlags.Instance | BindingFlags.NonPublic));
-            var local = il.DeclareLocal(typeof(IntPtr));
-            il.Stloc(local);
-            il.Ldloca(local);
-            il.Call(intPtrToInt64Method, typeof(IntPtr));
-            il.Ret();
+            using(var il = new GroboIL(method))
+            {
+                il.Ldarga(0);
+                il.Ldfld(typeof(ModuleHandle).GetField("m_ptr", BindingFlags.Instance | BindingFlags.NonPublic));
+                il.Ldfld(runtimeModuleType.GetField("m_pData", BindingFlags.Instance | BindingFlags.NonPublic));
+                var local = il.DeclareLocal(typeof(IntPtr));
+                il.Stloc(local);
+                il.Ldloca(local);
+                il.Call(intPtrToInt64Method, typeof(IntPtr));
+                il.Ret();
+            }
             return (Func<ModuleHandle, long>)method.CreateDelegate(typeof(Func<ModuleHandle, long>));
         }
 
