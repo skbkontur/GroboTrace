@@ -29,19 +29,7 @@ namespace GroboTrace
 
         public bool TryWrap(Type implementationType, out Type wrapperType)
         {
-            if(configurator.Forbidden(implementationType))
-            {
-                wrapperType = null;
-                return false;
-            }
-            if(!implementationType.IsGenericType)
-            {
-                wrapperType = GetWrapperType(implementationType);
-                return true;
-            }
-            wrapperType = GetWrapperType(implementationType.GetGenericTypeDefinition());
-            wrapperType = wrapperType.MakeGenericType(implementationType.GetGenericArguments());
-            return true;
+            return TryWrapInternal(implementationType, out wrapperType, false);
         }
 
         public static ulong GetMethodHashKey(MethodInfo method)
@@ -64,7 +52,24 @@ namespace GroboTrace
 
         public const string WrappersAssemblyName = "b5cc8d5b-fd0e-4b90-b545-d5c09c3ea040";
 
-        private Type GetWrapperType(Type implementationType)
+        private bool TryWrapInternal(Type implementationType, out Type wrapperType, bool allowReturnCurrentlyBuilding)
+        {
+            if(configurator.Forbidden(implementationType))
+            {
+                wrapperType = null;
+                return false;
+            }
+            if(!implementationType.IsGenericType)
+            {
+                wrapperType = GetWrapperType(implementationType, allowReturnCurrentlyBuilding);
+                return true;
+            }
+            wrapperType = GetWrapperType(implementationType.GetGenericTypeDefinition(), allowReturnCurrentlyBuilding);
+            wrapperType = wrapperType.MakeGenericType(implementationType.GetGenericArguments());
+            return true;
+        }
+
+        private Type GetWrapperType(Type implementationType, bool allowReturnCurrentlyBuilding)
         {
             var wrapperType = (Type)wrapperTypes[implementationType];
             if(wrapperType == null)
@@ -72,21 +77,28 @@ namespace GroboTrace
                 lock(lockObject)
                 {
                     wrapperType = (Type)wrapperTypes[implementationType];
-                    if(wrapperType == null)
-                    {
-                        wrapperType = WrapInternal(implementationType);
-                        wrapperTypes[implementationType] = wrapperType;
-                    }
+                    var buildingWrapperType = (Type)buildingWrapperTypes[implementationType];
+                    if(wrapperType == null && allowReturnCurrentlyBuilding && buildingWrapperType != null)
+                        return buildingWrapperType;
+                    wrapperTypes[implementationType] = wrapperType = WrapInternal(implementationType);
                 }
             }
             return wrapperType;
+        }
+
+        private void SetConstraints(GenericTypeParameterBuilder parameter, Type[] constraints)
+        {
+            var baseTypeConstraint = constraints.SingleOrDefault(type => type.IsClass);
+            if (baseTypeConstraint != null)
+                parameter.SetBaseTypeConstraint(baseTypeConstraint);
+            parameter.SetInterfaceConstraints(constraints.Where(type => !type.IsClass).ToArray());
         }
 
         private Type WrapInternal(Type implementationType)
         {
             var typeBuilder = module.DefineType(implementationType + "_Wrapper_" + Guid.NewGuid(), TypeAttributes.Public | TypeAttributes.Class);
 
-            wrapperTypes[implementationType] = typeBuilder;
+            buildingWrapperTypes[implementationType] = typeBuilder;
 
             Type[] genericArguments = null;
             GenericTypeParameterBuilder[] genericParameters = null;
@@ -97,10 +109,9 @@ namespace GroboTrace
                 for(var index = 0; index < genericArguments.Length; index++)
                 {
                     var genericArgument = genericArguments[index];
-                    genericParameters[index].SetGenericParameterAttributes(genericArgument.GenericParameterAttributes & ~(GenericParameterAttributes.Contravariant | GenericParameterAttributes.Covariant));
-                    if(genericArgument.BaseType != null && genericArgument.BaseType != typeof(object))
-                        genericParameters[index].SetBaseTypeConstraint(Refine(genericArgument.BaseType, genericArguments, genericParameters));
-                    genericParameters[index].SetInterfaceConstraints(genericArgument.GetGenericParameterConstraints().Select(type => Refine(type, genericArguments, genericParameters)).ToArray());
+                    var genericParameter = genericParameters[index];
+                    genericParameter.SetGenericParameterAttributes(genericArgument.GenericParameterAttributes & ~(GenericParameterAttributes.Contravariant | GenericParameterAttributes.Covariant));
+                    SetConstraints(genericParameter, genericArgument.GetGenericParameterConstraints());
                 }
             }
             var implField = typeBuilder.DefineField("impl", typeof(object), FieldAttributes.Private | FieldAttributes.InitOnly);
@@ -111,7 +122,7 @@ namespace GroboTrace
             {
                 var interfaces = new[] {implementationType}.Concat(implementationType.GetInterfaces()).Where(IsPublic).ToArray();
                 foreach(var interfaCe in interfaces)
-                    typeBuilder.AddInterfaceImplementation(Refine(interfaCe, genericArguments, genericParameters));
+                    typeBuilder.AddInterfaceImplementation(ReflectionExtensions.SubstituteGenericParameters(interfaCe, genericArguments, genericParameters));
                 foreach(var interfaceType in interfaces)
                 {
                     foreach(var method in interfaceType.GetMethods())
@@ -126,7 +137,7 @@ namespace GroboTrace
                 var builtMethods = new HashSet<MethodInfo>();
                 var interfaces = implementationType.GetInterfaces().Where(IsPublic).ToArray();
                 foreach(var interfaCe in interfaces)
-                    typeBuilder.AddInterfaceImplementation(Refine(interfaCe, genericArguments, genericParameters));
+                    typeBuilder.AddInterfaceImplementation(ReflectionExtensions.SubstituteGenericParameters(interfaCe, genericArguments, genericParameters));
                 foreach(var interfaceMap in interfaces.Select(implementationType.GetInterfaceMap))
                 {
                     for(var index = 0; index < interfaceMap.InterfaceMethods.Length; ++index)
@@ -152,6 +163,7 @@ namespace GroboTrace
 
             var result = typeBuilder.CreateType();
             wrapperConstructors[implementationType] = result.GetConstructor(new[] {typeof(object)});
+            buildingWrapperTypes[implementationType] = null;
             return result;
         }
 
@@ -176,12 +188,21 @@ namespace GroboTrace
             return method;
         }
 
-        private static Type Refine(Type type, Type[] genericArguments, Type[] genericParameters)
+        private MethodInfo SubstituteGenericParameters(MethodInfo method, Type[] genericArguments, GenericTypeParameterBuilder[] genericParameters)
         {
-            if(type != null && type.IsGenericType)
-                return type.GetGenericTypeDefinition().MakeGenericType(type.GetGenericArguments().Select(t => Refine(t, genericArguments, genericParameters)).ToArray());
-            var i = genericArguments == null ? -1 : Array.IndexOf(genericArguments, type);
-            return i >= 0 ? genericParameters[i] : type;
+            var declaringType = method.DeclaringType;
+            if(declaringType == null || !declaringType.IsGenericType)
+                return method;
+            var dict = new Dictionary<Type, Type>();
+            for(var i = 0; i < genericArguments.Length; ++i)
+                dict.Add(genericArguments[i], genericParameters[i]);
+            var declaringTypeGenericTypeDefinition = declaringType.GetGenericTypeDefinition();
+            var declaringTypeGenericParameters = declaringType.GetGenericArguments();
+            var instantiatedGenericArguments = ReflectionExtensions.SubstituteGenericParameters(declaringTypeGenericParameters, genericArguments, genericParameters);
+            declaringType = declaringTypeGenericTypeDefinition.MakeGenericType(instantiatedGenericArguments);
+            if(!isTypeBuilderInstantiation(declaringType))
+                return (MethodInfo)MethodBase.GetMethodFromHandle(method.MethodHandle, declaringType.TypeHandle);
+            return TypeBuilder.GetMethod(declaringType, (MethodInfo)MethodBase.GetMethodFromHandle(method.MethodHandle, declaringTypeGenericTypeDefinition.TypeHandle));
         }
 
         private MethodBuilder BuildMethod(TypeBuilder typeBuilder, MethodInfo implementationMethod, MethodInfo abstractionMethod, Type[] parentGenericArguments, GenericTypeParameterBuilder[] parentGenericParameters, FieldInfo implField, GroboIL typeInitializerIl)
@@ -190,24 +211,18 @@ namespace GroboTrace
             if(reflectedType.IsGenericTypeDefinition)
                 reflectedType = reflectedType.MakeGenericType(parentGenericParameters);
             else if(reflectedType.IsGenericType)
-                reflectedType = Refine(reflectedType, parentGenericArguments, parentGenericParameters);
+                reflectedType = ReflectionExtensions.SubstituteGenericParameters(reflectedType, parentGenericArguments, parentGenericParameters);
 
             if(parentGenericArguments != null)
-            {
-                if(abstractionMethod.DeclaringType.IsGenericType)
-                {
-                    var genericTypeDefinition = abstractionMethod.DeclaringType.GetGenericTypeDefinition();
-                    abstractionMethod = TypeBuilder.GetMethod(genericTypeDefinition.MakeGenericType(parentGenericParameters), (MethodInfo)MethodBase.GetMethodFromHandle(abstractionMethod.MethodHandle, genericTypeDefinition.TypeHandle));
-                }
-            }
+                abstractionMethod = SubstituteGenericParameters(abstractionMethod, parentGenericArguments, parentGenericParameters);
 
             MethodBuilder method;
             Type returnType;
             Type[] parameterTypes;
             if(!implementationMethod.IsGenericMethod)
             {
-                returnType = Refine(implementationMethod.ReturnType, parentGenericArguments, parentGenericParameters);
-                parameterTypes = implementationMethod.GetParameters().Select(info => Refine(info.ParameterType, parentGenericArguments, parentGenericParameters)).ToArray();
+                returnType = ReflectionExtensions.SubstituteGenericParameters(implementationMethod.ReturnType, parentGenericArguments, parentGenericParameters);
+                parameterTypes = ReflectionExtensions.SubstituteGenericParameters(implementationMethod.GetParameters().Select(info => info.ParameterType).ToArray(), parentGenericArguments, parentGenericParameters);
                 method = typeBuilder.DefineMethod(implementationMethod.Name, implementationMethod.IsVirtual ? MethodAttributes.Public | MethodAttributes.Virtual : MethodAttributes.Public, CallingConventions.HasThis, returnType, parameterTypes);
             }
             else
@@ -217,26 +232,26 @@ namespace GroboTrace
                 var genericParameters = method.DefineGenericParameters(genericArguments.Select(type => type.Name + "_ForWrapper").ToArray());
                 var allGenericArguments = parentGenericArguments == null ? genericArguments : parentGenericArguments.Concat(genericArguments).ToArray();
                 Type[] allGenericParameters = parentGenericParameters == null ? genericParameters : parentGenericParameters.Concat(genericParameters).ToArray();
-                if(implementationMethod.DeclaringType != null && implementationMethod.DeclaringType.IsGenericType)
+                var implementationMethodDeclaringType = implementationMethod.DeclaringType;
+                if(implementationMethodDeclaringType != null && implementationMethodDeclaringType.IsGenericType)
                 {
-                    allGenericArguments = allGenericArguments.Concat(implementationMethod.DeclaringType.GetGenericTypeDefinition().GetGenericArguments()).ToArray();
-                    allGenericParameters = allGenericParameters.Concat(implementationMethod.DeclaringType.GetGenericArguments()).ToArray();
+                    // The method we are wrapping may be inherited from some class or interface which is a generic type but some of the inheritors have instantiated some of the generic parameters
+                    // We need to instantiate them as well
+                    var implementationMethodGenericParameters = implementationMethodDeclaringType.GetGenericTypeDefinition().GetGenericArguments();
+                    var implementationMethodGenericArguments = implementationMethodDeclaringType.GetGenericArguments();
+                    var instantiatedParameters = implementationMethodGenericParameters.Select((type, i) => new {type, i}).Where(arg => arg.type != implementationMethodGenericArguments[arg.i]).Select(arg => arg.i).ToArray();
+                    allGenericArguments = allGenericArguments.Concat(instantiatedParameters.Select(i => implementationMethodGenericParameters[i])).ToArray();
+                    allGenericParameters = allGenericParameters.Concat(instantiatedParameters.Select(i => implementationMethodGenericArguments[i])).ToArray();
                 }
                 for(var index = 0; index < genericArguments.Length; index++)
                 {
                     var genericArgument = genericArguments[index];
-                    genericParameters[index].SetGenericParameterAttributes(genericArgument.GenericParameterAttributes);
-                    if(genericArgument.BaseType != null && genericArgument.BaseType != typeof(object))
-                    {
-                        var baseTypeConstraint = Refine(genericArgument.BaseType, allGenericArguments, allGenericParameters);
-                        if(!baseTypeConstraint.IsInterface)
-                            genericParameters[index].SetBaseTypeConstraint(baseTypeConstraint);
-                    }
-                    var interfaceConstraints = genericArgument.GetGenericParameterConstraints().Select(type => Refine(type, allGenericArguments, allGenericParameters)).ToArray();
-                    genericParameters[index].SetInterfaceConstraints(interfaceConstraints);
+                    var genericParameter = genericParameters[index];
+                    genericParameter.SetGenericParameterAttributes(genericArgument.GenericParameterAttributes);
+                    SetConstraints(genericParameter, ReflectionExtensions.SubstituteGenericParameters(genericArgument.GetGenericParameterConstraints(), allGenericArguments, allGenericParameters));
                 }
-                returnType = Refine(implementationMethod.ReturnType, allGenericArguments, allGenericParameters);
-                parameterTypes = implementationMethod.GetParameters().Select(info => Refine(info.ParameterType, allGenericArguments, allGenericParameters)).ToArray();
+                returnType = ReflectionExtensions.SubstituteGenericParameters(implementationMethod.ReturnType, allGenericArguments, allGenericParameters);
+                parameterTypes = ReflectionExtensions.SubstituteGenericParameters(implementationMethod.GetParameters().Select(info => info.ParameterType).ToArray(), allGenericArguments, allGenericParameters);
                 method.SetReturnType(returnType);
                 method.SetParameters(parameterTypes);
 
@@ -320,7 +335,7 @@ namespace GroboTrace
                 if(returnType.IsInterface)
                 {
                     Type wrapperType;
-                    if(TryWrap(returnType, out wrapperType))
+                    if(TryWrapInternal(returnType, out wrapperType, true))
                     {
                         il.Dup();
                         il.Isinst(typeof(IClassWrapper));
@@ -450,12 +465,32 @@ namespace GroboTrace
             return (Func<ModuleHandle, long>)method.CreateDelegate(typeof(Func<ModuleHandle, long>));
         }
 
+        private static Func<Type, bool> BuildIsTypeBuilderInstantiation()
+        {
+            var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(bool), new[] {typeof(Type)}, typeof(TracingWrapper), true);
+            var typeBuilderInstantiationType = typeof(Type).Assembly.GetTypes().FirstOrDefault(type => type.Name == "TypeBuilderInstantiation");
+            if(typeBuilderInstantiationType == null)
+                throw new InvalidOperationException("Type 'TypeBuilderInstantiation' is not found");
+            using(var il = new GroboIL(method))
+            {
+                il.Ldarg(0);
+                il.Isinst(typeBuilderInstantiationType);
+                il.Ldnull();
+                il.Cgt(true);
+                il.Ret();
+            }
+            return (Func<Type, bool>)method.CreateDelegate(typeof(Func<Type, bool>));
+        }
+
+        private static readonly Func<Type, bool> isTypeBuilderInstantiation = BuildIsTypeBuilderInstantiation();
+
         private readonly TracingWrapperConfigurator configurator;
 
         private static readonly AssemblyBuilder assembly = AppDomain.CurrentDomain.DefineDynamicAssembly(new AssemblyName(WrappersAssemblyName), AssemblyBuilderAccess.RunAndSave);
         private readonly ModuleBuilder module = assembly.DefineDynamicModule("Wrappers_" + Guid.NewGuid() /* , "wrappers.dll"*/);
 
         private readonly Hashtable wrapperTypes = new Hashtable();
+        private readonly Hashtable buildingWrapperTypes = new Hashtable();
         private readonly Hashtable wrapperConstructors = new Hashtable();
         private readonly object lockObject = new object();
 
