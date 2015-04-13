@@ -16,6 +16,12 @@ namespace Tests
             Assert.AreEqual(-1, arg1[0]);
         }
 
+        [Test]
+        public void Test2()
+        {
+            var instance = Create<I3<int, string>, C3<int, string>>();
+        }
+
         public class C1<T> : I1<T>
         {
             public void Add(T arg)
@@ -47,5 +53,15 @@ namespace Tests
             void F<T1, T2>(T1 arg1, T2 arg2)
                 where T1 : I1<T2>;
         }
+
+        public interface I3<T1, T2>
+        {
+        }
+
+        public class C3<T1, T2> : C1<T1[]>, I3<T1, T2>
+        {
+        }
+
+
     }
 }
