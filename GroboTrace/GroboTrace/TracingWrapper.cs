@@ -330,7 +330,7 @@ namespace GroboTrace
                 il.Call(tracingAnalyzerMethodStartedMethod); // TracingAnalyzer.MethodStarted(method, methodHandle)
                 il.Ldloca(startTicks); // stack: [ref startTicks]
                 il.Ldc_IntPtr(ticksReaderAddress);
-                il.Calli(CallingConventions.Standard, typeof(void), new[] {typeof(long).MakeByRefType()}); // GetTicks(ref startTicks)
+                il.Calli(CallingConvention.StdCall, typeof(void), new[] {typeof(long).MakeByRefType()}); // GetTicks(ref startTicks)
 
                 il.BeginExceptionBlock();
 
@@ -371,7 +371,7 @@ namespace GroboTrace
 
                 il.Ldloca(endTicks); // stack: [ref endTicks]
                 il.Ldc_IntPtr(ticksReaderAddress);
-                il.Calli(CallingConventions.Standard, typeof(void), new[] {typeof(long).MakeByRefType()}); // GetTicks(ref endTicks)
+                il.Calli(CallingConvention.StdCall, typeof(void), new[] {typeof(long).MakeByRefType()}); // GetTicks(ref endTicks)
 
                 il.Ldfld(methodField); // stack: [method]
                 il.Ldfld(methodHandleField); // stack: [method, methodHandle]
