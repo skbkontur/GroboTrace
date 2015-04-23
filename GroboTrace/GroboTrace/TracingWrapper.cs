@@ -317,7 +317,9 @@ namespace GroboTrace
             typeInitializerIl.Stfld(methodHandleField);
 
             var documentName = typeBuilder.Name + "." + method.Name + ".cil";
-            using(var il = new GroboIL(method, symWriter.DefineDocument(documentName, SymDocumentType.Text, SymLanguageType.ILAssembly, Guid.Empty)))
+            using(var il = string.IsNullOrEmpty(DebugOutputDirectory)
+                               ? new GroboIL(method)
+                               : new GroboIL(method, symWriter.DefineDocument(documentName, SymDocumentType.Text, SymLanguageType.ILAssembly, Guid.Empty)))
             {
                 var result = returnType == typeof(void) ? null : il.DeclareLocal(returnType);
                 var startTicks = il.DeclareLocal(typeof(long));
@@ -450,7 +452,7 @@ namespace GroboTrace
                 var ticks = il.DeclareLocal(typeof(long));
                 il.Ldloca(ticks); // stack: [&ticks]
                 il.Ldc_IntPtr(ticksReaderAddress);
-                il.Calli(CallingConventions.Standard, typeof(void), new[] {typeof(long).MakeByRefType()});
+                il.Calli(CallingConvention.StdCall, typeof(void), new[] {typeof(long).MakeByRefType()});
                 il.Ldloc(ticks);
                 il.Ret();
             }
