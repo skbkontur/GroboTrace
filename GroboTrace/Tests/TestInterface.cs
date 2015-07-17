@@ -49,6 +49,7 @@ namespace Tests
         [Test]
         public void TestCycle()
         {
+            TracingWrapper.DebugOutputDirectory = "c:\\temp";
             Type type;
             tracingWrapper.TryWrap(typeof(IZzz<int>), out type);
             var zzz = (IZzz<int>)Activator.CreateInstance(type, new object[] {new Zzz<int>(new Qzz<int>())});
