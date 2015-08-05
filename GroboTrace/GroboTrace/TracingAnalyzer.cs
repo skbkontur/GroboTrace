@@ -20,7 +20,8 @@ namespace GroboTrace
 
         public static Stats GetStats()
         {
-            var ticks = TracingWrapper.GetTicks();
+            long ticks;
+            TracingWrapper.TicksReader(out ticks);
             return new Stats
                 {
                     Tree = tree == null ? new MethodStatsNode() : tree.GetStatsAsTree(ticks),

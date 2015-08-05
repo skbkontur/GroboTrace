@@ -10,7 +10,7 @@ namespace GroboTrace
         {
             root = new MethodCallNode(null, 0, null);
             current = root;
-            startTicks = TracingWrapper.GetTicks();
+            TracingWrapper.TicksReader(out startTicks);
         }
 
         public void StartMethod(ulong methodHandle, MethodInfo method)
@@ -26,7 +26,7 @@ namespace GroboTrace
         public MethodStatsNode GetStatsAsTree(long endTicks)
         {
             var elapsedTicks = endTicks - startTicks;
-            MethodStatsNode result = root.GetStats(elapsedTicks);
+            var result = root.GetStats(elapsedTicks);
             result.MethodStats.Percent = 100.0;
             return result;
         }
@@ -46,7 +46,7 @@ namespace GroboTrace
         public void ClearStats()
         {
             root.ClearStats();
-            startTicks = TracingWrapper.GetTicks();
+            TracingWrapper.TicksReader(out startTicks);
         }
 
         private readonly MethodCallNode root;

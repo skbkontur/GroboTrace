@@ -32,11 +32,11 @@ namespace Tests
             Assert.AreEqual(5, instance.X);
         }
 
-        [Test]
+        [Test, Ignore]
         public void TestPerformance()
         {
             var instance = Create<I1, C1>();
-            const int iter = 100000000;
+            const int iter = 100000001;
             var stopwatch = Stopwatch.StartNew();
             for(int i = 0; i < iter; ++i)
                 instance.DoNothing();

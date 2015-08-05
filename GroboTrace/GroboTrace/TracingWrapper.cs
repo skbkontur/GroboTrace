@@ -8,7 +8,6 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 using GrEmit;
 using GrEmit.Utils;
@@ -17,10 +16,62 @@ namespace GroboTrace
 {
     public class TracingWrapper
     {
+        static unsafe TracingWrapper()
+        {
+            var dynamicMethodPointerExtractor = EmitDynamicMethodPointerExtractor();
+            var dynamicMethod = new DynamicMethod("GetTicks_" + Guid.NewGuid(), typeof(void), new[] {typeof(long).MakeByRefType()}, typeof(TracingWrapper));
+            using(var il = new GroboIL(dynamicMethod))
+            {
+                il.Ldarg(0);
+                il.Ldc_I8(123456789123456789L);
+                il.Stind(typeof(long));
+                il.Ret();
+            }
+            TicksReader = (TicksReaderDelegate)dynamicMethod.CreateDelegate(typeof(TicksReaderDelegate));
+            ticksReaderAddress = dynamicMethodPointerExtractor(dynamicMethod);
+            var pointer = (byte*)ticksReaderAddress;
+            byte[] code;
+            if(IntPtr.Size == 8)
+            {
+                // x64
+                code = new byte[]
+                    {
+                        0x52, // push rdx
+                        0x0F, 0x31, // rdtsc
+                        0x48, 0xC1, 0xE2, 0x20, // shl rdx, 32
+                        0x48, 0x09, 0xD0, // or rax, rdx
+                        0x48, 0x89, 0x01, // mov qword [rcx], rax
+                        0x5A, // pop rdx
+                        0xC3 // ret
+                    };
+            }
+            else
+            {
+                // x86
+                code = new byte[]
+                    {
+                        0x52, // push edx
+                        0x0F, 0x31, // rdtsc
+                        0x89, 0x01, // mov dword [ecx], eax
+                        0x89, 0x51, 0x04, // mov dword [ecx+4], edx
+                        0x5A, // pop edx
+                        0xC3 // ret
+                    };
+            }
+            fixed (byte* p = &code[0])
+            {
+                var pp = p;
+                for (var i = 0; i < code.Length; ++i)
+                    *pointer++ = *pp++;
+            }
+        }
+
         public TracingWrapper(TracingWrapperConfigurator configurator)
         {
             this.configurator = configurator;
         }
+
+        public delegate void TicksReaderDelegate(out long ticks);
 
         public object WrapAndCreate(object instance)
         {
@@ -49,8 +100,8 @@ namespace GroboTrace
             return methods.Single(method => moduleRuntimeHandleGetter(method.Module.ModuleHandle) == moduleHandle && method.MetadataToken == methodToken);
         }
 
-        public static Func<long> GetTicks { get { return getTicks; } }
         public static string DebugOutputDirectory;
+        public static readonly TicksReaderDelegate TicksReader;
 
         public const string WrappersAssemblyName = "b5cc8d5b-fd0e-4b90-b545-d5c09c3ea040";
 
@@ -330,7 +381,7 @@ namespace GroboTrace
                 il.Call(tracingAnalyzerMethodStartedMethod); // TracingAnalyzer.MethodStarted(method, methodHandle)
                 il.Ldloca(startTicks); // stack: [ref startTicks]
                 il.Ldc_IntPtr(ticksReaderAddress);
-                il.Calli(CallingConvention.StdCall, typeof(void), new[] {typeof(long).MakeByRefType()}); // GetTicks(ref startTicks)
+                il.Calli(CallingConventions.Standard, typeof(void), new[] {typeof(long).MakeByRefType()}); // GetTicks(ref startTicks)
 
                 il.BeginExceptionBlock();
 
@@ -371,7 +422,7 @@ namespace GroboTrace
 
                 il.Ldloca(endTicks); // stack: [ref endTicks]
                 il.Ldc_IntPtr(ticksReaderAddress);
-                il.Calli(CallingConvention.StdCall, typeof(void), new[] {typeof(long).MakeByRefType()}); // GetTicks(ref endTicks)
+                il.Calli(CallingConventions.Standard, typeof(void), new[] {typeof(long).MakeByRefType()}); // GetTicks(ref endTicks)
 
                 il.Ldfld(methodField); // stack: [method]
                 il.Ldfld(methodHandleField); // stack: [method, methodHandle]
@@ -408,55 +459,31 @@ namespace GroboTrace
             return constructor;
         }
 
-        [DllImport("kernel32.dll")]
-        private static extern IntPtr GetModuleHandle(string lpModuleName);
-
-        [DllImport("kernel32.dll")]
-        private static extern IntPtr LoadLibrary(string lpFileName);
-
-        [DllImport("kernel32.dll")]
-        private static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
-
-        private static IntPtr GetTicksReaderAddress()
+        private static Func<DynamicMethod, IntPtr> EmitDynamicMethodPointerExtractor()
         {
-            var resourceName = string.Format("rdtsc{0}.dll", IntPtr.Size == 4 ? "32" : "64");
-            var rdtscDll = Assembly.GetExecutingAssembly().GetManifestResourceStream("GroboTrace.Rdtsc." + resourceName);
-            if(rdtscDll != null)
+            var method = new DynamicMethod("DynamicMethodPointerExtractor", typeof(IntPtr), new[] {typeof(DynamicMethod)}, typeof(string), true);
+            using(var il = new GroboIL(method))
             {
-                var rdtscDllContent = new byte[rdtscDll.Length];
-                if(rdtscDll.Read(rdtscDllContent, 0, rdtscDllContent.Length) == rdtscDllContent.Length)
-                {
-                    var directoryName = AppDomain.CurrentDomain.BaseDirectory; //Path.GetDirectoryName(new Uri(Assembly.GetExecutingAssembly().CodeBase).LocalPath);
-                    if(string.IsNullOrEmpty(directoryName))
-                        throw new InvalidOperationException("Unable to obtain binaries directory");
-                    var rdtscDllFileName = Path.Combine(directoryName, string.Format("rdtsc{0}_{1}.dll", IntPtr.Size == 4 ? "32" : "64", Guid.NewGuid().ToString("N")));
-                    File.WriteAllBytes(rdtscDllFileName, rdtscDllContent);
-                    var rdtscDllModuleHandle = LoadLibrary(rdtscDllFileName);
-                    if(rdtscDllModuleHandle != IntPtr.Zero)
-                    {
-                        var rdtscProcAddress = GetProcAddress(rdtscDllModuleHandle, "ReadTimeStampCounter");
-                        if(rdtscProcAddress != IntPtr.Zero)
-                            return rdtscProcAddress;
-                    }
-                }
-            }
-            var kernel32ModuleHandle = GetModuleHandle("kernel32.dll");
-            return kernel32ModuleHandle == IntPtr.Zero ? IntPtr.Zero : GetProcAddress(kernel32ModuleHandle, "QueryPerformanceCounter");
-        }
-
-        private static Func<long> EmitTicksGetter()
-        {
-            var dynamicMethod = new DynamicMethod("GetTicks_" + Guid.NewGuid(), typeof(long), null, typeof(TracingWrapper));
-            using(var il = new GroboIL(dynamicMethod))
-            {
-                var ticks = il.DeclareLocal(typeof(long));
-                il.Ldloca(ticks); // stack: [&ticks]
-                il.Ldc_IntPtr(ticksReaderAddress);
-                il.Calli(CallingConvention.StdCall, typeof(void), new[] {typeof(long).MakeByRefType()});
-                il.Ldloc(ticks);
+                il.Ldarg(0); // stack: [dynamicMethod]
+                var getMethodDescriptorMethod = typeof(DynamicMethod).GetMethod("GetMethodDescriptor", BindingFlags.Instance | BindingFlags.NonPublic);
+                if(getMethodDescriptorMethod == null)
+                    throw new MissingMethodException(typeof(DynamicMethod).Name, "GetMethodDescriptor");
+                il.Call(getMethodDescriptorMethod); // stack: [dynamicMethod.GetMethodDescriptor()]
+                var runtimeMethodHandle = il.DeclareLocal(typeof(RuntimeMethodHandle));
+                il.Stloc(runtimeMethodHandle);
+                il.Ldloc(runtimeMethodHandle);
+                var prepareMethodMethod = typeof(RuntimeHelpers).GetMethod("PrepareMethod", new[] {typeof(RuntimeMethodHandle)});
+                if(prepareMethodMethod == null)
+                    throw new MissingMethodException(typeof(RuntimeHelpers).Name, "PrepareMethod");
+                il.Call(prepareMethodMethod);
+                var getFunctionPointerMethod = typeof(RuntimeMethodHandle).GetMethod("GetFunctionPointer", BindingFlags.Instance | BindingFlags.Public);
+                if(getFunctionPointerMethod == null)
+                    throw new MissingMethodException(typeof(RuntimeMethodHandle).Name, "GetFunctionPointer");
+                il.Ldloca(runtimeMethodHandle);
+                il.Call(getFunctionPointerMethod); // stack: [dynamicMethod.GetMethodDescriptor().GetFunctionPointer()]
                 il.Ret();
             }
-            return (Func<long>)dynamicMethod.CreateDelegate(typeof(Func<long>));
+            return (Func<DynamicMethod, IntPtr>)method.CreateDelegate(typeof(Func<DynamicMethod, IntPtr>));
         }
 
         private static Func<ModuleHandle, long> EmitModuleRuntimeHandleGetter()
@@ -520,8 +547,7 @@ namespace GroboTrace
         private static readonly MethodInfo typeFromTypeHandleMethod = HackHelpers.GetMethodDefinition<Type>(handle => Type.GetTypeFromHandle(default(RuntimeTypeHandle)));
         private static readonly MethodInfo typeTypeHandleGetter = HackHelpers.GetProp<Type>(type => type.TypeHandle).GetGetMethod();
 
-        private static readonly IntPtr ticksReaderAddress = GetTicksReaderAddress();
-        private static readonly Func<long> getTicks = EmitTicksGetter();
+        private static readonly IntPtr ticksReaderAddress;
         private static readonly Func<ModuleHandle, long> moduleRuntimeHandleGetter = EmitModuleRuntimeHandleGetter();
     }
 }
