@@ -14,6 +14,16 @@ using GrEmit.Utils;
 
 namespace GroboTrace
 {
+    public class MethodWrapper
+    {
+        public void Trace(MethodInfo method)
+        {
+            RuntimeHelpers.PrepareMethod(method.MethodHandle);
+            var body = method.GetMethodBody();
+
+        }
+    }
+
     public class TracingWrapper
     {
         static unsafe TracingWrapper()
