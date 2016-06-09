@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.SymbolStore;
 using System.IO;
@@ -12,6 +13,8 @@ using System.Runtime.CompilerServices;
 using GrEmit;
 using GrEmit.Utils;
 
+using GroboTrace.Injection;
+
 namespace GroboTrace
 {
     public class MethodWrapper
@@ -21,7 +24,101 @@ namespace GroboTrace
             RuntimeHelpers.PrepareMethod(method.MethodHandle);
             var body = method.GetMethodBody();
 
+            var parsedBody = new MethodBodyReader(method);
+
+            // todo
+
+            var parameterTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
+            var owner = method.ReflectedType ?? method.DeclaringType ?? typeof(string);
+            var dynMethod = new DynamicMethod("new_refresh_table_state", method.ReturnType, parameterTypes, owner, true);
+            parsedBody.EmitToStupid(dynMethod, body.LocalVariables);
+            delegates.Add(dynMethod.CreateDelegate(GetDelegateType(parameterTypes, method.ReturnType)));
+            if (!MethodUtil.HookMethod(dynMethod, method))
+                throw new InvalidOperationException(string.Format("ERROR: Unable to hook the method '{0}'", Formatter.Format(method)));
         }
+
+        private static Type GetDelegateType(Type[] parameterTypes, Type returnType)
+        {
+            // TODO ref types
+            if (returnType == typeof(void))
+            {
+                switch (parameterTypes.Length)
+                {
+                    case 0:
+                        return typeof(Action);
+                    case 1:
+                        return typeof(Action<>).MakeGenericType(parameterTypes);
+                    case 2:
+                        return typeof(Action<,>).MakeGenericType(parameterTypes);
+                    case 3:
+                        return typeof(Action<,,>).MakeGenericType(parameterTypes);
+                    case 4:
+                        return typeof(Action<,,,>).MakeGenericType(parameterTypes);
+                    case 5:
+                        return typeof(Action<,,,,>).MakeGenericType(parameterTypes);
+                    case 6:
+                        return typeof(Action<,,,,,>).MakeGenericType(parameterTypes);
+                    case 7:
+                        return typeof(Action<,,,,,,>).MakeGenericType(parameterTypes);
+                    case 8:
+                        return typeof(Action<,,,,,,,>).MakeGenericType(parameterTypes);
+                    case 9:
+                        return typeof(Action<,,,,,,,,>).MakeGenericType(parameterTypes);
+                    case 10:
+                        return typeof(Action<,,,,,,,,,>).MakeGenericType(parameterTypes);
+                    case 11:
+                        return typeof(Action<,,,,,,,,,,>).MakeGenericType(parameterTypes);
+                    case 12:
+                        return typeof(Action<,,,,,,,,,,,>).MakeGenericType(parameterTypes);
+                    case 13:
+                        return typeof(Action<,,,,,,,,,,,,>).MakeGenericType(parameterTypes);
+                    case 14:
+                        return typeof(Action<,,,,,,,,,,,,,>).MakeGenericType(parameterTypes);
+                    case 15:
+                        return typeof(Action<,,,,,,,,,,,,,,>).MakeGenericType(parameterTypes);
+                    default:
+                        throw new NotSupportedException("Too many parameters for Action: " + parameterTypes.Length);
+                }
+            }
+            parameterTypes = parameterTypes.Concat(new[] { returnType }).ToArray();
+            switch (parameterTypes.Length)
+            {
+                case 1:
+                    return typeof(Func<>).MakeGenericType(parameterTypes);
+                case 2:
+                    return typeof(Func<,>).MakeGenericType(parameterTypes);
+                case 3:
+                    return typeof(Func<,,>).MakeGenericType(parameterTypes);
+                case 4:
+                    return typeof(Func<,,,>).MakeGenericType(parameterTypes);
+                case 5:
+                    return typeof(Func<,,,,>).MakeGenericType(parameterTypes);
+                case 6:
+                    return typeof(Func<,,,,,>).MakeGenericType(parameterTypes);
+                case 7:
+                    return typeof(Func<,,,,,,>).MakeGenericType(parameterTypes);
+                case 8:
+                    return typeof(Func<,,,,,,,>).MakeGenericType(parameterTypes);
+                case 9:
+                    return typeof(Func<,,,,,,,,>).MakeGenericType(parameterTypes);
+                case 10:
+                    return typeof(Func<,,,,,,,,,>).MakeGenericType(parameterTypes);
+                case 11:
+                    return typeof(Func<,,,,,,,,,,>).MakeGenericType(parameterTypes);
+                case 12:
+                    return typeof(Func<,,,,,,,,,,,>).MakeGenericType(parameterTypes);
+                case 13:
+                    return typeof(Func<,,,,,,,,,,,,>).MakeGenericType(parameterTypes);
+                case 14:
+                    return typeof(Func<,,,,,,,,,,,,,>).MakeGenericType(parameterTypes);
+                case 15:
+                    return typeof(Func<,,,,,,,,,,,,,,>).MakeGenericType(parameterTypes);
+                default:
+                    throw new NotSupportedException("Too many parameters for Func: " + parameterTypes.Length);
+            }
+        }
+
+        private ConcurrentBag<Delegate> delegates = new ConcurrentBag<Delegate>();
     }
 
     public class TracingWrapper

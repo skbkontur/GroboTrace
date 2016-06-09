@@ -52,6 +52,10 @@
     <Compile Include="Exceptions\InaccessibleInterfaceException.cs" />
     <Compile Include="Exceptions\InaccessibleTypeException.cs" />
     <Compile Include="IClassWrapper.cs" />
+    <Compile Include="Injection\FrameworkVersions.cs" />
+    <Compile Include="Injection\ILInstruction.cs" />
+    <Compile Include="Injection\MethodBodyReader.cs" />
+    <Compile Include="Injection\MethodUtil.cs" />
     <Compile Include="MethodCallNode.cs" />
     <Compile Include="MethodCallTree.cs" />
     <Compile Include="MethodStats.cs" />
