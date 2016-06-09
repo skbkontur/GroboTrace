@@ -254,6 +254,16 @@ namespace GroboTrace.Injection
                 instructions[i].Offset += size;
         }
 
+        public void InsertBranchAt(int index, OpCode opCode, int targetIndex)
+        {
+            int targetOffset;
+            if(targetIndex < instructions.Count)
+                targetOffset = instructions[targetIndex].Offset;
+            else
+                targetOffset = instructions[instructions.Count - 1].Offset + instructions[instructions.Count - 1].Size;
+            InsertAt(index, opCode, targetOffset);
+        }
+
         public void EmitToStupid(DynamicMethod dynamicMethod, IList<LocalVariableInfo> localVariables)
         {
             var il = dynamicMethod.GetILGenerator();
@@ -292,6 +302,7 @@ namespace GroboTrace.Injection
                     break;
                 case OperandType.InlineBrTarget:
                 case OperandType.ShortInlineBrTarget:
+                    // todo
                     il.Emit(instruction.Code, labels[(int)instruction.Operand]);
                     break;
                 case OperandType.InlineField:
