@@ -37,8 +37,13 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="GrEmit">
+    <Reference Include="GrEmit, Version=2.1.3.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\Assemblies\GrEmit.dll</HintPath>
+    </Reference>
+    <Reference Include="ILReader.Core, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\Assemblies\ILReader.Core.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -52,10 +57,16 @@
     <Compile Include="Exceptions\InaccessibleInterfaceException.cs" />
     <Compile Include="Exceptions\InaccessibleTypeException.cs" />
     <Compile Include="IClassWrapper.cs" />
+    <Compile Include="Injection\AbstractInstruction.cs" />
+    <Compile Include="Injection\BeginCatchInstruction.cs" />
+    <Compile Include="Injection\BeginExceptionInstruction.cs" />
+    <Compile Include="Injection\BeginFinallyInstruction.cs" />
+    <Compile Include="Injection\EndExceptionInstruction.cs" />
     <Compile Include="Injection\FrameworkVersions.cs" />
     <Compile Include="Injection\ILInstruction.cs" />
     <Compile Include="Injection\MethodBodyReader.cs" />
     <Compile Include="Injection\MethodUtil.cs" />
+    <Compile Include="Injection\Program.cs" />
     <Compile Include="MethodCallNode.cs" />
     <Compile Include="MethodCallTree.cs" />
     <Compile Include="MethodStats.cs" />

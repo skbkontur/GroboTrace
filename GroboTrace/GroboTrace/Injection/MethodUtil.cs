@@ -36,7 +36,7 @@ namespace GroboTrace.Injection
                 return false;
             var destAddr = GetMethodAddress(dest);
             RuntimeHelpers.PrepareMethod(victim.MethodHandle);
-            var victimAddr = victim.MethodHandle.GetFunctionPointer();
+            var victimAddr = GetMethodAddress(victim);
 
             bool canMakeRelJmp;
             int dist = 0;

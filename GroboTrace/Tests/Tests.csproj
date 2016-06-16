@@ -54,6 +54,7 @@
     <Compile Include="TestClassByAttributeSelector.cs" />
     <Compile Include="TestGenericMethod.cs" />
     <Compile Include="TestGenericType.cs" />
+    <Compile Include="TestILReader.cs" />
     <Compile Include="TestInterface.cs" />
     <Compile Include="TestNonPublic.cs" />
   </ItemGroup>

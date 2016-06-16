@@ -9,32 +9,398 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
 
 using GrEmit;
 using GrEmit.Utils;
 
 using GroboTrace.Injection;
 
+using ILReader;
+using ILReader.Readers;
+
 namespace GroboTrace
 {
+    public class LocalInfo
+    {
+        public int LocalIndex;
+        public Type LocalType;
+        public bool IsPinned;
+
+        public LocalInfo(int localIndex, Type localType, bool isPinned)
+        {
+            LocalIndex = localIndex;
+            LocalType = localType;
+            IsPinned = isPinned;
+        }
+    }
+
+
     public class MethodWrapper
     {
-        public void Trace(MethodInfo method)
-        {
-            RuntimeHelpers.PrepareMethod(method.MethodHandle);
-            var body = method.GetMethodBody();
+        private MethodInfo methodInfo;
 
+        public MethodWrapper(MethodInfo methodInfo)
+        {
+            this.methodInfo = methodInfo;
+        }
+
+
+        public static MethodInfo[] methods = new MethodInfo[1000000];
+        public int methodsNumber;
+
+        public void Trace()
+        {
+            var method = methodInfo;
+            
+            RuntimeHelpers.PrepareMethod(method.MethodHandle);
+
+
+            IILReaderConfiguration cfg = Configuration.Resolve(method);
+            var reader = cfg.GetReader(method);
+            foreach(IInstruction instruction in reader)
+            {
+                var opCode = instruction.OpCode;
+                object operand = instruction.Operand;
+                int ILOffset = instruction.Offset;
+                Console.WriteLine(string.Format("{2}: {0} {1}", opCode, operand, ILOffset));
+                // ...
+            }
+
+            var hashkey = (long)GetMethodHashKey(method);
+            var ourMethodIndex = methodsNumber;
+            methods[methodsNumber++] = method;
+            
+
+            var body = method.GetMethodBody();
             var parsedBody = new MethodBodyReader(method);
 
-            // todo
+            HashSet<int> tryOffsetSet = new HashSet<int>();
+
+            
+
+            foreach(var clause in body.ExceptionHandlingClauses)
+            {
+                tryOffsetSet.Add(clause.TryOffset);
+            }
+
+            foreach(var tryOffset in tryOffsetSet)
+            {
+                for (int index = 0; index < parsedBody.instructions.Count; ++index)
+                    if(parsedBody.instructions[index].Offset == tryOffset)
+                    {
+                        parsedBody.instructions.Insert(index, new BeginExceptionInstruction(tryOffset));
+                        break;
+                    }
+                int endExceptionBlockOffset = body.ExceptionHandlingClauses
+                                                  .Where(clause => clause.TryOffset == tryOffset)
+                                                  .Max(clause => clause.HandlerOffset + clause.HandlerLength);
+
+                for (int index = 0; index < parsedBody.instructions.Count; ++index)
+                    if (parsedBody.instructions[index].Offset == endExceptionBlockOffset)
+                    {
+                        parsedBody.instructions.Insert(index, new EndExceptionInstruction(endExceptionBlockOffset));
+                        break;
+                    }
+            }
+
+            foreach (var clause in body.ExceptionHandlingClauses)
+            {
+                //Catch
+                if (clause.Flags == ExceptionHandlingClauseOptions.Clause)
+                {
+                    for (int index = 0; index < parsedBody.instructions.Count; ++index)
+                        if (parsedBody.instructions[index].Offset == clause.HandlerOffset)
+                        {
+                            parsedBody.instructions.Insert(index, new BeginCatchInstruction(clause.HandlerOffset, clause.CatchType));
+                            break;
+                        }
+                }
+
+                //Finally
+                if (clause.Flags == ExceptionHandlingClauseOptions.Finally)
+                {
+                    for (int index = 0; index < parsedBody.instructions.Count; ++index)
+                        if (parsedBody.instructions[index].Offset == clause.HandlerOffset)
+                        {
+                            parsedBody.instructions.Insert(index, new BeginFinallyInstruction(clause.HandlerOffset));
+                            break;
+                        }
+                }
+
+
+            }
+
+
+
+
+            List<LocalInfo> extendedLocalVariables = body.LocalVariables
+                .Select(localVariable => new LocalInfo(localVariable.LocalIndex, localVariable.LocalType, localVariable.IsPinned))
+                .ToList();
+
+            int startTicksLocalIndex = body.LocalVariables.Count;
+            LocalInfo startTicksLocal = new LocalInfo(startTicksLocalIndex, typeof(long), false);
+            extendedLocalVariables.Add(startTicksLocal);
+
+
+            int methodLocalIndex = startTicksLocalIndex + 1;
+            LocalInfo methodLocal = new LocalInfo(methodLocalIndex, typeof(MethodInfo), false);
+            extendedLocalVariables.Add(methodLocal);
+
+            int resultLocalIndex = methodLocalIndex + 1;
+
+            parsedBody.InsertAt(parsedBody.instructions.Count, OpCodes.Nop, null); 
+
+            var position = 0;
+
+            while (position < parsedBody.instructions.Count)
+            {
+                if (!(parsedBody.instructions[position] is ILInstruction))
+                {
+                    position++;
+                    continue;
+                }
+
+
+                if (((ILInstruction)parsedBody.instructions[position]).Code == OpCodes.Ret)
+                {
+                    parsedBody.RemoveAt(position);
+                    if (method.ReturnType != typeof(void))
+                    {
+                        parsedBody.InsertAt(position, OpCodes.Stloc, (ushort)resultLocalIndex); // stloc receives unsigned 16-bit
+                        parsedBody.InsertBranchAt(position + 1, OpCodes.Br, parsedBody.instructions.Count - 1);
+                        position += 2;
+                    }
+                    else
+                    {
+                        parsedBody.InsertBranchAt(position, OpCodes.Br, parsedBody.instructions.Count - 1);
+                        ++position;
+                    }
+                }
+                else
+                {
+                    ++position;
+                }
+
+
+            }
+
+
+
+
+
+
+
+
+
+            int startIndex = 0;
+
+            parsedBody.InsertAt(startIndex++, OpCodes.Ldsfld, typeof(MethodWrapper).GetField("methods", BindingFlags.Static | BindingFlags.Public)); // [ methods[] ]
+            parsedBody.InsertAt(startIndex++, OpCodes.Ldc_I4, ourMethodIndex); // [methods[], ourMethodIndex]
+            parsedBody.InsertAt(startIndex++, OpCodes.Ldelem_Ref, null); // [ ourMethod ]
+            parsedBody.InsertAt(startIndex++, OpCodes.Dup, null); // [ourMethod, ourMethod]
+            parsedBody.InsertAt(startIndex++, OpCodes.Stloc, (ushort)methodLocalIndex); // [ourMethod]
+            parsedBody.InsertAt(startIndex++, OpCodes.Ldc_I8, hashkey); // [ outMethod, hashkey ]
+            parsedBody.InsertAt(startIndex++, OpCodes.Call, typeof(TracingAnalyzer).GetMethod("MethodStarted")); // []
+
+
+            // todo use calli
+            parsedBody.InsertAt(startIndex++, OpCodes.Ldsfld, typeof(MethodWrapper).GetField("ticksReader", BindingFlags.Static | BindingFlags.NonPublic)); // [ticksReader]
+            parsedBody.InsertAt(startIndex++, OpCodes.Callvirt, typeof(Func<long>).GetMethod("Invoke")); // [ticks]
+            parsedBody.InsertAt(startIndex++, OpCodes.Stloc, (ushort)startTicksLocalIndex); // []
+
+            parsedBody.instructions.Insert(startIndex, new BeginExceptionInstruction(parsedBody.instructions[startIndex].Offset));
+            startIndex++;
+
+
+            var nopIdx = parsedBody.instructions.Count - 1;
+
+            var lastInstruction = parsedBody.instructions.Last();
+
+            parsedBody.instructions.Insert(parsedBody.instructions.Count, 
+                                           new BeginFinallyInstruction(lastInstruction.Offset + lastInstruction.Size));
+
+
+
+            parsedBody.InsertAt(parsedBody.instructions.Count, OpCodes.Ldloc, (ushort)methodLocalIndex); // [ ourMethod ]
+            parsedBody.InsertAt(parsedBody.instructions.Count, OpCodes.Ldc_I8, hashkey); // [ outMethod, hashkey ]
+            parsedBody.InsertAt(parsedBody.instructions.Count, OpCodes.Ldsfld, typeof(MethodWrapper).GetField("ticksReader", BindingFlags.Static | BindingFlags.NonPublic)); // [ outMethod, hashkey ][ticksReader]
+            parsedBody.InsertAt(parsedBody.instructions.Count, OpCodes.Callvirt, typeof(Func<long>).GetMethod("Invoke")); // [ outMethod, hashkey ][ticks]
+            parsedBody.InsertAt(parsedBody.instructions.Count, OpCodes.Ldloc, (ushort)startTicksLocalIndex); // [ outMethod, hashkey, ticks, startTicks]
+            parsedBody.InsertAt(parsedBody.instructions.Count, OpCodes.Sub, null); // [ outMethod, hashkey, elapsed]
+
+            parsedBody.InsertAt(parsedBody.instructions.Count, OpCodes.Call, typeof(TracingAnalyzer).GetMethod("MethodFinished")); //[]
+
+            lastInstruction = parsedBody.instructions.Last();
+
+            parsedBody.instructions.Insert(parsedBody.instructions.Count,
+                                           new EndExceptionInstruction(lastInstruction.Offset + lastInstruction.Size));
+
+
+            //parsedBody.RemoveAt(nopIdx);
+
+
+            if (method.ReturnType != typeof(void))
+            {
+                LocalInfo resultLocal = new LocalInfo(resultLocalIndex, method.ReturnType, false);
+                extendedLocalVariables.Add(resultLocal);
+
+                parsedBody.InsertAt(parsedBody.instructions.Count, OpCodes.Ldloc, (ushort)resultLocalIndex); // ldloc receives unsigned 16-bit 
+            }
+            parsedBody.InsertAt(parsedBody.instructions.Count, OpCodes.Ret, null);
+
 
             var parameterTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
             var owner = method.ReflectedType ?? method.DeclaringType ?? typeof(string);
-            var dynMethod = new DynamicMethod("new_refresh_table_state", method.ReturnType, parameterTypes, owner, true);
-            parsedBody.EmitToStupid(dynMethod, body.LocalVariables);
+            var dynMethod = new DynamicMethod(method.Name + "_" + Guid.NewGuid(), method.ReturnType, parameterTypes, owner, true);
+            //parsedBody.EmitToStupid(dynMethod, extendedLocalVariables);
+            parsedBody.EmitToStupidUsingGroboIL(dynMethod, extendedLocalVariables);
+
+
+            //var dynamicMethod = new DynamicMethod(method.Name + "_" + Guid.NewGuid(), method.ReturnType, parameterTypes, owner, true);
+            
+            //using (var il = new GroboIL(dynamicMethod))
+            //{
+            //    //var l23 = il.DefineLabel("23", false);
+            //    //var l36 = il.DefineLabel("36", false);
+
+            //    il.BeginExceptionBlock();
+            //    il.Ldarg(0);
+            //    il.Ldarg(1);
+            //    il.Div(false);
+            //    il.Call(HackHelpers.GetMethodDefinition<int>(x => Console.WriteLine(x)));
+            //    //il.Leave(l23);
+            //    il.BeginCatchBlock(typeof(DivideByZeroException));
+            //    //il.Pop();
+            //    il.Ldstr("zzz");
+            //    il.Call(HackHelpers.GetMethodDefinition<string>(x => Console.WriteLine(x)));
+            //    //il.Leave(l23);
+
+            //    //il.MarkLabel(l23);
+
+            //    //il.Leave(l36);
+            //    il.BeginFinallyBlock();
+            //    il.Ldstr("qxx");
+            //    il.Call(HackHelpers.GetMethodDefinition<string>(x => Console.WriteLine(x)));
+
+            //    il.EndExceptionBlock();
+            //    //il.MarkLabel(l36);
+            //    il.Ldc_I4(1);
+            //    il.Ret();
+            //}
+
+
             delegates.Add(dynMethod.CreateDelegate(GetDelegateType(parameterTypes, method.ReturnType)));
-            if (!MethodUtil.HookMethod(dynMethod, method))
+
+            IILReaderConfiguration cfg2 = Configuration.Resolve(dynMethod);
+            var reader2 = cfg2.GetReader(dynMethod);
+            foreach (IInstruction instruction in reader2)
+            {
+                var opCode = instruction.OpCode;
+                object operand = instruction.Operand;
+                int ILOffset = instruction.Offset;
+                var bytes = instruction.Bytes;
+                Console.Write(string.Format("{2}: {0} {1} Bytes: ", opCode, operand, ILOffset));
+                foreach(var b in bytes)
+                {
+                    Console.Write("{0} ",b);
+                }
+                Console.WriteLine();
+                // ...
+            }
+
+            if (!MethodUtil.HookMethod(dynMethod, method)) // todo dynmethod
                 throw new InvalidOperationException(string.Format("ERROR: Unable to hook the method '{0}'", Formatter.Format(method)));
+
+            //
+            //
+
+
+            
+
+
+
+
+        }
+
+        static unsafe MethodWrapper()
+        {
+            var dynamicMethodPointerExtractor = EmitDynamicMethodPointerExtractor();
+            var dynamicMethod = new DynamicMethod("GetTicks_" + Guid.NewGuid(), typeof(long), Type.EmptyTypes, typeof(string));
+            using (var il = new GroboIL(dynamicMethod))
+            {
+                il.Ldc_I8(123456789123456789L);
+                il.Ret();
+            }
+            ticksReader = (Func<long>)dynamicMethod.CreateDelegate(typeof(Func<long>));
+            ticksReaderAddress = dynamicMethodPointerExtractor(dynamicMethod);
+            var pointer = (byte*)ticksReaderAddress;
+            byte[] code;
+            if (IntPtr.Size == 8)
+            {
+                // x64
+                code = new byte[]
+                    {
+                        0x0f, 0x31, // rdtsc
+                        0x48, 0xc1, 0xe2, 0x20, // shl rdx, 32
+                        0x48, 0x09, 0xd0, // or rax, rdx
+                        0xc3, // ret
+                    };
+            }
+            else
+            {
+                // x86
+                code = new byte[]
+                    {
+                        0x0F, 0x31, // rdtsc
+                        0xC3 // ret
+                    };
+            }
+            fixed (byte* p = &code[0])
+            {
+                var pp = p;
+                for (var i = 0; i < code.Length; ++i)
+                    *pointer++ = *pp++;
+            }
+        }
+
+        public static Func<long> TicksReader { get { return ticksReader; } }
+
+        private static Func<DynamicMethod, IntPtr> EmitDynamicMethodPointerExtractor()
+        {
+            var method = new DynamicMethod("DynamicMethodPointerExtractor", typeof(IntPtr), new[] { typeof(DynamicMethod) }, typeof(string), true);
+            using (var il = new GroboIL(method))
+            {
+                il.Ldarg(0); // stack: [dynamicMethod]
+                var getMethodDescriptorMethod = typeof(DynamicMethod).GetMethod("GetMethodDescriptor", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (getMethodDescriptorMethod == null)
+                    throw new MissingMethodException(typeof(DynamicMethod).Name, "GetMethodDescriptor");
+                il.Call(getMethodDescriptorMethod); // stack: [dynamicMethod.GetMethodDescriptor()]
+                var runtimeMethodHandle = il.DeclareLocal(typeof(RuntimeMethodHandle));
+                il.Stloc(runtimeMethodHandle);
+                il.Ldloc(runtimeMethodHandle);
+                var prepareMethodMethod = typeof(RuntimeHelpers).GetMethod("PrepareMethod", new[] { typeof(RuntimeMethodHandle) });
+                if (prepareMethodMethod == null)
+                    throw new MissingMethodException(typeof(RuntimeHelpers).Name, "PrepareMethod");
+                il.Call(prepareMethodMethod);
+                var getFunctionPointerMethod = typeof(RuntimeMethodHandle).GetMethod("GetFunctionPointer", BindingFlags.Instance | BindingFlags.Public);
+                if (getFunctionPointerMethod == null)
+                    throw new MissingMethodException(typeof(RuntimeMethodHandle).Name, "GetFunctionPointer");
+                il.Ldloca(runtimeMethodHandle);
+                il.Call(getFunctionPointerMethod); // stack: [dynamicMethod.GetMethodDescriptor().GetFunctionPointer()]
+                il.Ret();
+            }
+            return (Func<DynamicMethod, IntPtr>)method.CreateDelegate(typeof(Func<DynamicMethod, IntPtr>));
+        }
+        
+        public static ulong GetMethodHashKey(MethodInfo method)
+        {
+            var typeHandle = (ulong)method.ReflectedType.TypeHandle.Value.ToInt64();
+            var methodHandle = (ulong)method.MethodHandle.Value.ToInt64();
+            unchecked
+            {
+                return typeHandle * 0x9E3779B9B7E15163 + methodHandle;
+            }
         }
 
         private static Type GetDelegateType(Type[] parameterTypes, Type returnType)
@@ -118,7 +484,11 @@ namespace GroboTrace
             }
         }
 
-        private ConcurrentBag<Delegate> delegates = new ConcurrentBag<Delegate>();
+        private static IntPtr rdtscAddr; // Func<long>
+
+        public ConcurrentBag<Delegate> delegates = new ConcurrentBag<Delegate>();
+        private static IntPtr ticksReaderAddress;
+        private static readonly Func<long> ticksReader;
     }
 
     public class TracingWrapper

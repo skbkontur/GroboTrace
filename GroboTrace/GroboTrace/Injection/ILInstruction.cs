@@ -5,11 +5,11 @@ using System.Reflection.Emit;
 
 namespace GroboTrace.Injection
 {
-    public class ILInstruction
+    public class ILInstruction : AbstractInstruction
     {
         // Fields
 
-        public int Size
+        public override int Size
         {
             get
             {
@@ -55,7 +55,7 @@ namespace GroboTrace.Injection
 
         public object OperandData { get; set; }
 
-        public int Offset { get; set; }
+        public override int Offset { get; set; }
 
         /// <summary>
         ///     Returns a friendly strign representation of this instruction
@@ -120,7 +120,7 @@ namespace GroboTrace.Injection
                 case OperandType.InlineR:
                 case OperandType.ShortInlineI:
                 case OperandType.ShortInlineR:
-                    result += Operand.ToString();
+                    result += " " + Operand;
                     break;
                 case OperandType.InlineTok:
                     if(Operand is Type)
@@ -128,7 +128,9 @@ namespace GroboTrace.Injection
                     else
                         result += "not supported";
                     break;
-
+                case OperandType.InlineVar:
+                    result += " " + Operand;
+                    break;
                 default:
                     result += "not supported";
                     break;
