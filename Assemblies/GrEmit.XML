@@ -139,6 +139,11 @@
                 Throws the exception object currently on the evaluation stack.
             </summary>
         </member>
+        <member name="M:GrEmit.GroboIL.Rethrow">
+            <summary>
+                Rethrows the current exception.
+            </summary>
+        </member>
         <member name="M:GrEmit.GroboIL.Switch(GrEmit.GroboIL.Label[])">
             <summary>
                 Implements a jump table.
