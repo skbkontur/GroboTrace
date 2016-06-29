@@ -26,7 +26,7 @@ namespace GroboTrace.Injection
             var methodInfo = typeof (Program).GetMethod("CompareOneAndTwo");
             RuntimeHelpers.PrepareMethod(methodInfo.MethodHandle);
             var methodBody = methodInfo.GetMethodBody();
-            var parsedBody = new MethodBodyReader(methodInfo);
+            var parsedBody = new MethodBodyModifier(methodInfo);
             parsedBody.GetBodyCode();
             return;
         }

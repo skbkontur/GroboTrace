@@ -7,14 +7,13 @@ namespace GroboTrace.Injection
 {
     public class ILInstruction : AbstractInstruction
     {
-        // Fields
-
+        
         public override int Size
         {
             get
             {
                 var size = Code.Size;
-                switch(Code.OperandType)
+                switch (Code.OperandType)
                 {
                 case OperandType.InlineBrTarget:
                 case OperandType.InlineField:
@@ -48,7 +47,6 @@ namespace GroboTrace.Injection
             }
         }
 
-        // Properties
         public OpCode Code { get; set; }
 
         public object Operand { get; set; }
@@ -58,16 +56,16 @@ namespace GroboTrace.Injection
         public override int Offset { get; set; }
 
         /// <summary>
-        ///     Returns a friendly strign representation of this instruction
+        ///     Returns a friendly string representation of this instruction
         /// </summary>
         /// <returns></returns>
         public string GetCode()
         {
             var result = "";
             result += GetExpandedOffset(Offset) + " : " + Code;
-            if(Operand != null)
+            if (Operand != null)
             {
-                switch(Code.OperandType)
+                switch (Code.OperandType)
                 {
                 case OperandType.InlineField:
                     var fOperand = ((FieldInfo)Operand);
@@ -80,7 +78,7 @@ namespace GroboTrace.Injection
                     {
                         var mOperand = (MethodInfo)Operand;
                         result += " ";
-                        if(!mOperand.IsStatic) result += "instance ";
+                        if (!mOperand.IsStatic) result += "instance ";
                         result += Globals.ProcessSpecialTypes(mOperand.ReturnType.ToString()) +
                                   " " + Globals.ProcessSpecialTypes(mOperand.ReflectedType.ToString()) +
                                   "::" + mOperand.Name + "()";
@@ -91,7 +89,7 @@ namespace GroboTrace.Injection
                         {
                             var mOperand = (ConstructorInfo)Operand;
                             result += " ";
-                            if(!mOperand.IsStatic) result += "instance ";
+                            if (!mOperand.IsStatic) result += "instance ";
                             result += "void " +
                                       Globals.ProcessSpecialTypes(mOperand.ReflectedType.ToString()) +
                                       "::" + mOperand.Name + "()";
@@ -109,7 +107,7 @@ namespace GroboTrace.Injection
                     result += " " + Globals.ProcessSpecialTypes(Operand.ToString());
                     break;
                 case OperandType.InlineString:
-                    if(Operand.ToString() == "\r\n") result += " \"\\r\\n\"";
+                    if (Operand.ToString() == "\r\n") result += " \"\\r\\n\"";
                     else result += " \"" + Operand + "\"";
                     break;
                 case OperandType.ShortInlineVar:
@@ -123,7 +121,7 @@ namespace GroboTrace.Injection
                     result += " " + Operand;
                     break;
                 case OperandType.InlineTok:
-                    if(Operand is Type)
+                    if (Operand is Type)
                         result += ((Type)Operand).FullName;
                     else
                         result += "not supported";
@@ -150,7 +148,7 @@ namespace GroboTrace.Injection
         private string GetExpandedOffset(long offset)
         {
             var result = offset.ToString();
-            for(var i = 0; result.Length < 4; i++)
+            for (var i = 0; result.Length < 4; i++)
                 result = "0" + result;
             return result;
         }
@@ -168,18 +166,18 @@ namespace GroboTrace.Injection
             singleByteOpCodes = new OpCode[0x100];
             multiByteOpCodes = new OpCode[0x100];
             var infoArray1 = typeof(OpCodes).GetFields();
-            for(var num1 = 0; num1 < infoArray1.Length; num1++)
+            for (var num1 = 0; num1 < infoArray1.Length; num1++)
             {
                 var info1 = infoArray1[num1];
-                if(info1.FieldType == typeof(OpCode))
+                if (info1.FieldType == typeof(OpCode))
                 {
                     var code1 = (OpCode)info1.GetValue(null);
                     var num2 = (ushort)code1.Value;
-                    if(num2 < 0x100)
+                    if (num2 < 0x100)
                         singleByteOpCodes[(int)num2] = code1;
                     else
                     {
-                        if((num2 & 0xff00) != 0xfe00)
+                        if ((num2 & 0xff00) != 0xfe00)
                             throw new Exception("Invalid OpCode.");
                         multiByteOpCodes[num2 & 0xff] = code1;
                     }
@@ -199,7 +197,7 @@ namespace GroboTrace.Injection
         public static string ProcessSpecialTypes(string typeName)
         {
             var result = typeName;
-            switch(typeName)
+            switch (typeName)
             {
             case "System.string":
             case "System.String":

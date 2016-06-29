@@ -63,8 +63,9 @@
     <Compile Include="Injection\BeginFinallyInstruction.cs" />
     <Compile Include="Injection\EndExceptionInstruction.cs" />
     <Compile Include="Injection\FrameworkVersions.cs" />
+    <Compile Include="Injection\ILBytesReader.cs" />
     <Compile Include="Injection\ILInstruction.cs" />
-    <Compile Include="Injection\MethodBodyReader.cs" />
+    <Compile Include="Injection\MethodBodyModifier.cs" />
     <Compile Include="Injection\MethodUtil.cs" />
     <Compile Include="Injection\Program.cs" />
     <Compile Include="MethodCallNode.cs" />

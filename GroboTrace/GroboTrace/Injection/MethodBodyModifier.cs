@@ -1,218 +1,219 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Security.Permissions;
 
 using GrEmit;
 
 namespace GroboTrace.Injection
 {
-    public class MethodBodyReader
+    public class LocalInfo
     {
-        /// <summary>
-        ///     MethodBodyReader constructor
-        /// </summary>
-        /// <param name="mi">
-        ///     The System.Reflection defined MethodInfo
-        /// </param>
-        public MethodBodyReader(MethodInfo mi)
+        public int LocalIndex;
+        public Type LocalType;
+        public bool IsPinned;
+
+        public LocalInfo(int localIndex, Type localType, bool isPinned)
         {
-            this.mi = mi;
-            var methodBody = mi.GetMethodBody();
-            if(methodBody != null)
+            LocalIndex = localIndex;
+            LocalType = localType;
+            IsPinned = isPinned;
+        }
+    }
+
+    public class MethodBodyModifier
+    {
+        private MethodInfo methodInfo;
+        private List<AbstractInstruction> instructions;
+
+        private List<LocalInfo> extendedLocalVariables;
+
+        public int startTicksLocalIndex;
+        public int methodLocalIndex;
+        public int resultLocalIndex;
+
+        public MethodBodyModifier(MethodInfo methodInfo)
+        {
+            this.methodInfo = methodInfo;
+            ILBytesReader ilBytesReader = new ILBytesReader(methodInfo);
+            instructions = ilBytesReader.GetInstructionsList();
+        }
+
+
+        public void InsertExceptionInstructionsAccordingToClauses()
+        {
+            HashSet<int> tryOffsetSet = new HashSet<int>();
+            MethodBody body = methodInfo.GetMethodBody();
+
+            foreach (var clause in body.ExceptionHandlingClauses)
             {
-                il = methodBody.GetILAsByteArray();
-                ConstructInstructions(mi.Module);
+                tryOffsetSet.Add(clause.TryOffset);
+            }
+
+            foreach (var tryOffset in tryOffsetSet)
+            {
+                for (int index = 0; index < instructions.Count; ++index)
+                    if (instructions[index].Offset == tryOffset)
+                    {
+                        instructions.Insert(index, new BeginExceptionInstruction(tryOffset));
+                        break;
+                    }
+                int endExceptionBlockOffset = body.ExceptionHandlingClauses
+                                                  .Where(clause => clause.TryOffset == tryOffset)
+                                                  .Max(clause => clause.HandlerOffset + clause.HandlerLength);
+
+                for (int index = 0; index < instructions.Count; ++index)
+                    if (instructions[index].Offset == endExceptionBlockOffset)
+                    {
+                        instructions.Insert(index, new EndExceptionInstruction(endExceptionBlockOffset));
+                        break;
+                    }
+            }
+
+            foreach (var clause in body.ExceptionHandlingClauses)
+            {
+                //Catch
+                if (clause.Flags == ExceptionHandlingClauseOptions.Clause)
+                {
+                    for (int index = 0; index < instructions.Count; ++index)
+                        if (instructions[index].Offset == clause.HandlerOffset)
+                        {
+                            instructions.Insert(index, new BeginCatchInstruction(clause.HandlerOffset, clause.CatchType));
+                            break;
+                        }
+                }
+
+                //Finally
+                if (clause.Flags == ExceptionHandlingClauseOptions.Finally)
+                {
+                    for (int index = 0; index < instructions.Count; ++index)
+                        if (instructions[index].Offset == clause.HandlerOffset)
+                        {
+                            instructions.Insert(index, new BeginFinallyInstruction(clause.HandlerOffset));
+                            break;
+                        }
+                }
+            }
+
+        }
+
+        public void ExtendLocalVariables()
+        {
+            MethodBody body = methodInfo.GetMethodBody();
+            extendedLocalVariables = body.LocalVariables
+                .Select(localVariable => new LocalInfo(localVariable.LocalIndex, localVariable.LocalType, localVariable.IsPinned))
+                .ToList();
+
+            startTicksLocalIndex = body.LocalVariables.Count;
+            LocalInfo startTicksLocal = new LocalInfo(startTicksLocalIndex, typeof(long), false);
+            extendedLocalVariables.Add(startTicksLocal);
+
+            methodLocalIndex = startTicksLocalIndex + 1;
+            LocalInfo methodLocal = new LocalInfo(methodLocalIndex, typeof(MethodInfo), false);
+            extendedLocalVariables.Add(methodLocal);
+
+            if (methodInfo.ReturnType != typeof(void))
+            {
+                resultLocalIndex = methodLocalIndex + 1;
+                LocalInfo resultLocal = new LocalInfo(resultLocalIndex, methodInfo.ReturnType, false);
+                extendedLocalVariables.Add(resultLocal);
             }
         }
 
-        public MethodBodyReader(byte[] il, Module module)
+        public void ReplaceAllRetInstructions()
         {
-            this.il = il;
-            ConstructInstructions(module);
-        }
+            InsertAt(instructions.Count, OpCodes.Nop, null); // to refer to
 
-        /// <summary>
-        ///     Constructs the array of ILInstructions according to the IL byte code.
-        /// </summary>
-        /// <param name="module"></param>
-        private void ConstructInstructions(Module module)
-        {
-            var il = this.il;
             var position = 0;
-            instructions = new List<AbstractInstruction>();
-            while(position < il.Length)
-            {
-                var instruction = new ILInstruction();
 
-                // get the operation code of the current instruction
-                var code = OpCodes.Nop;
-                ushort value = il[position++];
-                if(value != 0xfe)
-                    code = Globals.singleByteOpCodes[value];
+            while (position < instructions.Count)
+            {
+                if (!(instructions[position] is ILInstruction))
+                {
+                    position++;
+                    continue;
+                }
+
+                if (((ILInstruction)instructions[position]).Code == OpCodes.Ret)
+                {
+                    RemoveAt(position);
+                    if (methodInfo.ReturnType != typeof(void))
+                    {
+                        InsertAt(position, OpCodes.Stloc, (ushort)resultLocalIndex); // stloc receives unsigned 16-bit
+                        InsertBranchAt(position + 1, OpCodes.Br, instructions.Count - 1);
+                        position += 2;
+                    }
+                    else
+                    {
+                        InsertBranchAt(position, OpCodes.Br, instructions.Count - 1);
+                        ++position;
+                    }
+                }
                 else
                 {
-                    value = il[position++];
-                    code = Globals.multiByteOpCodes[value];
+                    ++position;
                 }
-                instruction.Code = code;
-                instruction.Offset = position - 1;
-                int metadataToken;
-                // get the operand of the current operation
-                switch(code.OperandType)
-                {
-                case OperandType.InlineBrTarget:
-                    metadataToken = ReadInt32(ref position);
-                    instruction.OperandData = metadataToken;
-                    metadataToken += position;
-                    instruction.Operand = metadataToken;
-                    break;
-                case OperandType.InlineField:
-                    metadataToken = ReadInt32(ref position);
-                    instruction.OperandData = metadataToken;
-                    instruction.Operand = module.ResolveField(metadataToken);
-                    break;
-                case OperandType.InlineMethod:
-                    metadataToken = ReadInt32(ref position);
-                    instruction.OperandData = metadataToken;
-                    instruction.Operand = module.ResolveMethod(metadataToken);
-                    break;
-                case OperandType.InlineSig:
-                    metadataToken = ReadInt32(ref position);
-                    instruction.OperandData = metadataToken;
-                    instruction.Operand = module.ResolveSignature(metadataToken);
-                    break;
-                case OperandType.InlineTok:
-                    metadataToken = ReadInt32(ref position);
-                    instruction.OperandData = metadataToken;
-                    try
-                    {
-                        instruction.Operand = module.ResolveType(metadataToken);
-                    }
-                    catch
-                    {
-                    }
-                    // SSS : see what to do here
-                    break;
-                case OperandType.InlineType:
-                    metadataToken = ReadInt32(ref position);
-                    instruction.OperandData = metadataToken;
-                    // now we call the ResolveType always using the generic attributes type in order
-                    // to support decompilation of generic methods and classes
-
-                    // thanks to the guys from code project who commented on this missing feature
-
-                    instruction.Operand = module.ResolveType(metadataToken, mi.DeclaringType.GetGenericArguments(), mi.GetGenericArguments());
-                    break;
-                case OperandType.InlineI:
-                    {
-                        instruction.Operand = ReadInt32(ref position);
-                        instruction.OperandData = instruction.Operand;
-                        break;
-                    }
-                case OperandType.InlineI8:
-                    {
-                        instruction.Operand = ReadInt64(ref position);
-                        instruction.OperandData = instruction.Operand;
-                        break;
-                    }
-                case OperandType.InlineNone:
-                    {
-                        instruction.Operand = null;
-                        instruction.OperandData = instruction.Operand;
-                        break;
-                    }
-                case OperandType.InlineR:
-                    {
-                        instruction.Operand = ReadDouble(ref position);
-                        instruction.OperandData = instruction.Operand;
-                        break;
-                    }
-                case OperandType.InlineString:
-                    {
-                        metadataToken = ReadInt32(ref position);
-                        instruction.OperandData = metadataToken;
-                        instruction.Operand = module.ResolveString(metadataToken);
-                        break;
-                    }
-                case OperandType.InlineSwitch:
-                    {
-                        var count = ReadInt32(ref position);
-                        var casesAddresses = new int[count];
-                        for(var i = 0; i < count; i++)
-                            casesAddresses[i] = ReadInt32(ref position);
-                        instruction.OperandData = casesAddresses;
-                        var cases = new int[count];
-                        for(var i = 0; i < count; i++)
-                            cases[i] = position + casesAddresses[i];
-                        instruction.Operand = cases;
-                        break;
-                    }
-                case OperandType.InlineVar:
-                    {
-                        var index = ReadUInt16(ref position);
-                        instruction.OperandData = index;
-                        instruction.Operand = index;
-                        break;
-                    }
-                case OperandType.ShortInlineBrTarget:
-                    {
-                        var sByte = ReadSByte(ref position);
-                        instruction.OperandData = sByte;
-                        instruction.Operand = sByte + position;
-                        break;
-                    }
-                case OperandType.ShortInlineI:
-                    {
-                        instruction.Operand = ReadSByte(ref position);
-                        instruction.OperandData = instruction.Operand;
-                        break;
-                    }
-                case OperandType.ShortInlineR:
-                    {
-                        instruction.Operand = ReadSingle(ref position);
-                        instruction.OperandData = instruction.Operand;
-                        break;
-                    }
-                case OperandType.ShortInlineVar:
-                    {
-                        var index = ReadByte(ref position);
-                        instruction.OperandData = index;
-                        instruction.Operand = index;
-                        break;
-                    }
-                default:
-                    {
-                        throw new Exception("Unknown operand type.");
-                    }
-                }
-                instructions.Add(instruction);
             }
         }
 
-        public object GetRefferencedOperand(Module module, int metadataToken)
+        public void InsertHeader(int ourMethodIndex, long hashkey)
         {
-            var assemblyNames = module.Assembly.GetReferencedAssemblies();
-            for(var i = 0; i < assemblyNames.Length; i++)
-            {
-                var modules = Assembly.Load(assemblyNames[i]).GetModules();
-                for(var j = 0; j < modules.Length; j++)
-                {
-                    try
-                    {
-                        var t = modules[j].ResolveType(metadataToken);
-                        return t;
-                    }
-                    catch
-                    {
-                    }
-                }
-            }
-            return null;
-            //System.Reflection.Assembly.Load(module.Assembly.GetReferencedAssemblies()[3]).GetModules()[0].ResolveType(metadataToken)
+            int startIndex = 0;
+
+            InsertAt(startIndex++, OpCodes.Ldsfld, typeof(MethodWrapper).GetField("methods", BindingFlags.Static | BindingFlags.Public)); // [ methods[] ]
+            InsertAt(startIndex++, OpCodes.Ldc_I4, ourMethodIndex); // [methods[], ourMethodIndex]
+            InsertAt(startIndex++, OpCodes.Ldelem_Ref, null); // [ ourMethod ]
+            InsertAt(startIndex++, OpCodes.Dup, null); // [ourMethod, ourMethod]
+            InsertAt(startIndex++, OpCodes.Stloc, (ushort)methodLocalIndex); // [ourMethod]
+            InsertAt(startIndex++, OpCodes.Ldc_I8, hashkey); // [ ourMethod, hashkey ]
+            InsertAt(startIndex++, OpCodes.Call, typeof(TracingAnalyzer).GetMethod("MethodStarted")); // []
+
+            // todo use calli
+            InsertAt(startIndex++, OpCodes.Ldsfld, typeof(MethodWrapper).GetField("ticksReader", BindingFlags.Static | BindingFlags.NonPublic)); // [ticksReader]
+            InsertAt(startIndex++, OpCodes.Callvirt, typeof(Func<long>).GetMethod("Invoke")); // [ticks]
+            InsertAt(startIndex++, OpCodes.Stloc, (ushort)startTicksLocalIndex); // []
+
+            instructions.Insert(startIndex, new BeginExceptionInstruction(instructions[startIndex].Offset));
+            startIndex++;
+
+            //var nopIdx = parsedBody.instructions.Count - 1;
         }
+
+        public void InsertFooter(long hashkey)
+        {
+            var lastInstruction = instructions.Last();
+
+            instructions.Insert(instructions.Count,
+                        new BeginFinallyInstruction(lastInstruction.Offset + lastInstruction.Size));
+
+            InsertAt(instructions.Count, OpCodes.Ldloc, (ushort)methodLocalIndex); // [ ourMethod ]
+            InsertAt(instructions.Count, OpCodes.Ldc_I8, hashkey); // [ ourMethod, hashkey ]
+            InsertAt(instructions.Count, OpCodes.Ldsfld, typeof(MethodWrapper).GetField("ticksReader", BindingFlags.Static | BindingFlags.NonPublic)); // [ outMethod, hashkey ][ticksReader]
+            InsertAt(instructions.Count, OpCodes.Callvirt, typeof(Func<long>).GetMethod("Invoke")); // [ outMethod, hashkey ][ticks]
+            InsertAt(instructions.Count, OpCodes.Ldloc, (ushort)startTicksLocalIndex); // [ outMethod, hashkey, ticks, startTicks]
+            InsertAt(instructions.Count, OpCodes.Sub, null); // [ outMethod, hashkey, elapsed]
+
+            InsertAt(instructions.Count, OpCodes.Call, typeof(TracingAnalyzer).GetMethod("MethodFinished")); //[]
+
+            lastInstruction = instructions.Last();
+
+            instructions.Insert(instructions.Count,
+                                           new EndExceptionInstruction(lastInstruction.Offset + lastInstruction.Size));
+
+            if (methodInfo.ReturnType != typeof(void))
+            {
+                InsertAt(instructions.Count, OpCodes.Ldloc, (ushort)resultLocalIndex); // ldloc receives unsigned 16-bit 
+            }
+
+            InsertAt(instructions.Count, OpCodes.Ret, null);
+
+        }
+
+
+
+
 
         /// <summary>
         ///     Gets the IL code of the method
@@ -221,8 +222,8 @@ namespace GroboTrace.Injection
         public string GetBodyCode()
         {
             var result = "";
-            if(instructions == null) return result;
-            foreach(AbstractInstruction abstractInstruction in instructions)
+            if (instructions == null) return result;
+            foreach (AbstractInstruction abstractInstruction in instructions)
             {
                 ILInstruction ilInstruction = abstractInstruction as ILInstruction;
                 if (ilInstruction != null)
@@ -236,24 +237,24 @@ namespace GroboTrace.Injection
             if (index > instructions.Count)
                 throw new ArgumentOutOfRangeException("TODO");
 
-            if(opcode == OpCodes.Ldloc)
+            if (opcode == OpCodes.Ldloc)
             {
                 var idx = (ushort)operand;
-                switch(idx)
+                switch (idx)
                 {
-                    case 0:
+                case 0:
                     opcode = OpCodes.Ldloc_0;
                     operand = null;
                     break;
-                    case 1:
+                case 1:
                     opcode = OpCodes.Ldloc_1;
                     operand = null;
                     break;
-                    case 2:
+                case 2:
                     opcode = OpCodes.Ldloc_2;
                     operand = null;
                     break;
-                    case 3:
+                case 3:
                     opcode = OpCodes.Ldloc_3;
                     operand = null;
                     break;
@@ -265,36 +266,36 @@ namespace GroboTrace.Injection
                 var idx = (ushort)operand;
                 switch (idx)
                 {
-                    case 0:
-                        opcode = OpCodes.Stloc_0;
-                        operand = null;
-                        break;
-                    case 1:
-                        opcode = OpCodes.Stloc_1;
-                        operand = null;
-                        break;
-                    case 2:
-                        opcode = OpCodes.Stloc_2;
-                        operand = null;
-                        break;
-                    case 3:
-                        opcode = OpCodes.Stloc_3;
-                        operand = null;
-                        break;
+                case 0:
+                    opcode = OpCodes.Stloc_0;
+                    operand = null;
+                    break;
+                case 1:
+                    opcode = OpCodes.Stloc_1;
+                    operand = null;
+                    break;
+                case 2:
+                    opcode = OpCodes.Stloc_2;
+                    operand = null;
+                    break;
+                case 3:
+                    opcode = OpCodes.Stloc_3;
+                    operand = null;
+                    break;
                 }
             }
 
             ILInstruction newInstruction;
             int threshold;
-            if(index == instructions.Count)
+            if (index == instructions.Count)
             {
                 newInstruction = new ILInstruction
-                {
-                    Code = opcode,
-                    Operand = operand,
-                    OperandData = operand,
-                    Offset = instructions[instructions.Count - 1].Offset + instructions[instructions.Count - 1].Size
-                };
+                    {
+                        Code = opcode,
+                        Operand = operand,
+                        OperandData = operand,
+                        Offset = instructions[instructions.Count - 1].Offset + instructions[instructions.Count - 1].Size
+                    };
                 instructions.Add(newInstruction);
                 threshold = newInstruction.Offset;
             }
@@ -305,37 +306,36 @@ namespace GroboTrace.Injection
                 instructions.Insert(index, newInstruction);
             }
             var size = newInstruction.Size;
-            foreach(AbstractInstruction abstractInstruction in instructions)
+            foreach (AbstractInstruction abstractInstruction in instructions)
             {
                 ILInstruction instruction = abstractInstruction as ILInstruction;
                 if (instruction == null)
                     continue;
 
-                if(instruction.Code.OperandType == OperandType.InlineBrTarget || instruction.Code.OperandType == OperandType.ShortInlineBrTarget)
+                if (instruction.Code.OperandType == OperandType.InlineBrTarget || instruction.Code.OperandType == OperandType.ShortInlineBrTarget)
                 {
                     var target = (int)instruction.Operand;
-                    if(target >= threshold)
+                    if (target >= threshold)
                         instruction.Operand = target + size;
                 }
-                else if(instruction.Code.OperandType == OperandType.InlineSwitch)
+                else if (instruction.Code.OperandType == OperandType.InlineSwitch)
                 {
                     var targets = (int[])instruction.Operand;
-                    for(var i = 0; i < targets.Length; ++i)
+                    for (var i = 0; i < targets.Length; ++i)
                     {
-                        if(targets[i] >= threshold)
+                        if (targets[i] >= threshold)
                             targets[i] += size;
                     }
                 }
             }
-            for(var i = index + 1; i < instructions.Count; ++i)
+            for (var i = index + 1; i < instructions.Count; ++i)
                 instructions[i].Offset += size;
         }
-
 
         public void InsertBranchAt(int index, OpCode opCode, int targetIndex)
         {
             int targetOffset;
-            if(targetIndex < instructions.Count)
+            if (targetIndex < instructions.Count)
                 targetOffset = instructions[targetIndex].Offset;
             else
                 targetOffset = instructions[instructions.Count - 1].Offset + instructions[instructions.Count - 1].Size;
@@ -348,9 +348,6 @@ namespace GroboTrace.Injection
             InsertAt(index, opCode, targetOffset);
         }
 
-
-
-       
         public void RemoveAt(int index)
         {
             // todo
@@ -370,7 +367,7 @@ namespace GroboTrace.Injection
                 if (instruction.Code.OperandType == OperandType.InlineBrTarget || instruction.Code.OperandType == OperandType.ShortInlineBrTarget)
                 {
                     var target = (int)instruction.Operand;
-                    if(target > threshold)
+                    if (target > threshold)
                         instruction.Operand = target - size;
                 }
                 else if (instruction.Code.OperandType == OperandType.InlineSwitch)
@@ -387,34 +384,48 @@ namespace GroboTrace.Injection
             instructions.RemoveAt(index);
         }
 
+        public DynamicMethod GetExtendedMethod()
+        {
+            var parameterTypes = methodInfo.GetParameters().Select(p => p.ParameterType).ToArray();
+            var owner = methodInfo.ReflectedType ?? methodInfo.DeclaringType ?? typeof(string);
+            var newMethod = new DynamicMethod(methodInfo.Name + "_" + Guid.NewGuid(), methodInfo.ReturnType, parameterTypes, owner, true);
+
+            EmitToStupidUsingGroboIL(newMethod, extendedLocalVariables);
+
+            return newMethod;
+        }
+
+        public ConcurrentBag<Delegate> delegates = new ConcurrentBag<Delegate>();
+
+
         public void EmitToStupidUsingGroboIL(DynamicMethod dynamicMethod, IList<LocalInfo> localVariables)
         {
-            using(var il = new GroboIL(dynamicMethod))
+            using (var il = new GroboIL(dynamicMethod))
             {
                 il.VerificationKind = TypesAssignabilityVerificationKind.LowLevelOnly; // todo изменить
                 var locals = new Dictionary<int, GroboIL.Local>();
-                foreach(var localVariable in localVariables.OrderBy(x => x.LocalIndex))
+                foreach (var localVariable in localVariables.OrderBy(x => x.LocalIndex))
                     locals.Add(localVariable.LocalIndex, il.DeclareLocal(localVariable.LocalType, localVariable.IsPinned));
                 var labels = new Dictionary<int, GroboIL.Label>();
-                foreach(AbstractInstruction abstractInstruction in instructions)
+                foreach (AbstractInstruction abstractInstruction in instructions)
                 {
                     ILInstruction instruction = abstractInstruction as ILInstruction;
                     if (instruction == null)
                         continue;
 
-                    if(instruction.Code.OperandType == OperandType.InlineBrTarget
-                       || instruction.Code.OperandType == OperandType.ShortInlineBrTarget)
+                    if (instruction.Code.OperandType == OperandType.InlineBrTarget
+                        || instruction.Code.OperandType == OperandType.ShortInlineBrTarget)
                     {
                         var target = (int)instruction.Operand;
-                        if(!labels.ContainsKey(target))
+                        if (!labels.ContainsKey(target))
                             labels.Add(target, il.DefineLabel(target.ToString(), false));
                     }
-                    else if(instruction.Code.OperandType == OperandType.InlineSwitch)
+                    else if (instruction.Code.OperandType == OperandType.InlineSwitch)
                     {
                         var targets = (int[])instruction.Operand;
-                        foreach(var target in targets)
+                        foreach (var target in targets)
                         {
-                            if(!labels.ContainsKey(target))
+                            if (!labels.ContainsKey(target))
                                 labels.Add(target, il.DefineLabel(target.ToString(), false));
                         }
                     }
@@ -429,25 +440,25 @@ namespace GroboTrace.Injection
                 for (int position = 0; position < instructions.Count; position++)
                 {
                     AbstractInstruction abstractInstruction = instructions[position];
-                    if(abstractInstruction is BeginExceptionInstruction)
+                    if (abstractInstruction is BeginExceptionInstruction)
                     {
                         il.BeginExceptionBlock();
                         continue;
                     }
 
-                    if(abstractInstruction is BeginCatchInstruction)
+                    if (abstractInstruction is BeginCatchInstruction)
                     {
                         il.BeginCatchBlock(((BeginCatchInstruction)abstractInstruction).ExceptionType);
                         continue;
                     }
 
-                    if(abstractInstruction is BeginFinallyInstruction)
+                    if (abstractInstruction is BeginFinallyInstruction)
                     {
                         il.BeginFinallyBlock();
                         continue;
                     }
 
-                    if(abstractInstruction is EndExceptionInstruction)
+                    if (abstractInstruction is EndExceptionInstruction)
                     {
                         il.EndExceptionBlock();
                         continue;
@@ -456,10 +467,10 @@ namespace GroboTrace.Injection
                     var instruction = abstractInstruction as ILInstruction;
 
                     GroboIL.Label label;
-                    if(labels.TryGetValue(instruction.Offset, out label))
+                    if (labels.TryGetValue(instruction.Offset, out label))
                         il.MarkLabel(label);
 
-                    switch((int)(ushort)instruction.Code.Value)
+                    switch ((int)(ushort)instruction.Code.Value)
                     {
                     case 0x00: // Nop
                         il.Nop();
@@ -580,7 +591,7 @@ namespace GroboTrace.Injection
                         break;
                     case 0x28: // Call
                         var perhapsMethodInfo = instruction.Operand as MethodInfo;
-                        if(perhapsMethodInfo != null)
+                        if (perhapsMethodInfo != null)
                             il.Callnonvirt(perhapsMethodInfo, tailcall); // todo optionalParameterTypes ??? 
                         else
                             il.Call((ConstructorInfo)instruction.Operand);
@@ -860,11 +871,9 @@ namespace GroboTrace.Injection
                         break;
                     case 0x86: // Conv_Ovf_U1_Un
                         il.Conv_Ovf<byte>(true);
-                        ;
                         break;
                     case 0x87: // Conv_Ovf_U2_Un
                         il.Conv_Ovf<ushort>(true);
-                        ;
                         break;
                     case 0x88: // Conv_Ovf_U4_Un
                         il.Conv_Ovf<uint>(true);
@@ -874,11 +883,9 @@ namespace GroboTrace.Injection
                         break;
                     case 0x8a: // Conv_Ovf_I_Un
                         il.Conv_Ovf<IntPtr>(true);
-                        ;
                         break;
                     case 0x8b: // Conv_Ovf_U_Un
                         il.Conv_Ovf<UIntPtr>(true);
-                        ;
                         break;
                     case 0x8c: // Box
                         il.Box((Type)instruction.Operand);
@@ -993,13 +1000,13 @@ namespace GroboTrace.Injection
                         break;
                     case 0xd0: // Ldtoken
                         var perhapsFieldInfo = instruction.Operand as FieldInfo;
-                        if(perhapsFieldInfo != null)
+                        if (perhapsFieldInfo != null)
                         {
                             il.Ldtoken(perhapsFieldInfo);
                             break;
                         }
                         perhapsMethodInfo = instruction.Operand as MethodInfo;
-                        if(perhapsMethodInfo != null)
+                        if (perhapsMethodInfo != null)
                         {
                             il.Ldtoken(perhapsMethodInfo);
                             break;
@@ -1056,7 +1063,6 @@ namespace GroboTrace.Injection
                             || nextInstruction is BeginFinallyInstruction)
                             break;
 
-                       
                         il.Leave(labels[(int)instruction.Operand]);
                         break;
                     case 0xdf: // Stind_I
@@ -1163,7 +1169,7 @@ namespace GroboTrace.Injection
                         il.Initblk(isVolatile, unaligned);
                         break;
                     case 0xfe1a: // Rethrow
-                        throw new NotSupportedException();
+                        il.Rethrow();
                         break;
                     case 0xfe1c: // Sizeof
                         throw new NotSupportedException();
@@ -1186,306 +1192,11 @@ namespace GroboTrace.Injection
 
                 Console.WriteLine("zzzz");
             }
-
         }
 
-        //public void EmitToStupid(DynamicMethod dynamicMethod, IList<LocalInfo> localVariables)
-        //{
-        //    var il = dynamicMethod.GetILGenerator();
-        //    var locals = new Dictionary<int, LocalBuilder>();
-        //    foreach(var localVariable in localVariables.OrderBy(x => x.LocalIndex))
-        //        locals.Add(localVariable.LocalIndex, il.DeclareLocal(localVariable.LocalType, localVariable.IsPinned));
-        //    var labels = new Dictionary<int, Label>();
-        //    foreach(var instruction in instructions)
-        //    {
-        //        if(instruction.Code.OperandType == OperandType.InlineBrTarget
-        //           || instruction.Code.OperandType == OperandType.ShortInlineBrTarget)
-        //        {
-        //            var target = (int)instruction.Operand;
-        //            if(!labels.ContainsKey(target))
-        //                labels.Add(target, il.DefineLabel());
-        //        }
-        //        else if(instruction.Code.OperandType == OperandType.InlineSwitch)
-        //        {
-        //            var targets = (int[])instruction.Operand;
-        //            foreach(var target in targets)
-        //            {
-        //                if(!labels.ContainsKey(target))
-        //                    labels.Add(target, il.DefineLabel());
-        //            }
-        //        }
-        //    }
-        //    foreach(var instruction in instructions)
-        //    {
-        //        Label label;
-        //        if(labels.TryGetValue(instruction.Offset, out label))
-        //            il.MarkLabel(label);
-        //        switch(instruction.Code.OperandType)
-        //        {
-        //        case OperandType.InlineNone:
-        //            il.Emit(instruction.Code);
-        //            break;
-        //        case OperandType.InlineBrTarget:
-        //        case OperandType.ShortInlineBrTarget:
-        //            // todo
-        //            il.Emit(instruction.Code, labels[(int)instruction.Operand]);
-        //            break;
-        //        case OperandType.InlineField:
-        //            il.Emit(instruction.Code, (FieldInfo)instruction.Operand);
-        //            break;
-        //        case OperandType.InlineI:
-        //            il.Emit(instruction.Code, (int)instruction.Operand);
-        //            break;
-        //        case OperandType.InlineI8:
-        //            il.Emit(instruction.Code, (long)instruction.Operand);
-        //            break;
-        //        case OperandType.InlineMethod:
-        //            var method = instruction.Operand as MethodInfo;
-        //            if(method != null)
-        //                il.Emit(instruction.Code, method);
-        //            else
-        //                il.Emit(instruction.Code, (ConstructorInfo)instruction.Operand);
-        //            break;
-        //        case OperandType.InlineR:
-        //            il.Emit(instruction.Code, (double)instruction.Operand);
-        //            break;
-        //        case OperandType.InlineSig:
-        //            throw new InvalidOperationException();
-        //        case OperandType.InlineString:
-        //            il.Emit(instruction.Code, (string)instruction.Operand);
-        //            break;
-        //        case OperandType.InlineTok:
-        //            {
-        //                if(instruction.Operand is FieldInfo)
-        //                    il.Emit(instruction.Code, (FieldInfo)instruction.Operand);
-        //                else if(instruction.Operand is MethodInfo)
-        //                    il.Emit(instruction.Code, (MethodInfo)instruction.Operand);
-        //                else if(instruction.Operand is Type)
-        //                    il.Emit(instruction.Code, (Type)instruction.Operand);
-        //                else throw new InvalidOperationException();
-        //            }
-        //            break;
-        //        case OperandType.InlineType:
-        //            il.Emit(instruction.Code, (Type)instruction.Operand);
-        //            break;
-        //        case OperandType.ShortInlineI:
-        //            il.Emit(instruction.Code, (sbyte)instruction.OperandData);
-        //            break;
-        //        case OperandType.InlineVar:
-        //            il.Emit(instruction.Code, (ushort)instruction.OperandData);
-        //            break;
-        //        case OperandType.ShortInlineVar:
-        //            il.Emit(instruction.Code, (byte)instruction.OperandData);
-        //            break;
-        //        case OperandType.ShortInlineR:
-        //            il.Emit(instruction.Code, (float)instruction.OperandData);
-        //            break;
-        //        case OperandType.InlineSwitch:
-        //            il.Emit(instruction.Code, ((int[])instruction.Operand).Select(target => labels[target]).ToArray());
-        //            break;
-        //        }
-        //    }
-        //}
 
-        //public unsafe void EmitTo(DynamicMethod dynamicMethod, int maxStackSize, bool initLocals, byte[] localSignature)
-        //{
-        //    var dynamicIlInfo = dynamicMethod.GetDynamicILInfo();
-        //    var lastInstruction = instructions.Last();
-        //    var result = new byte[lastInstruction.Offset + lastInstruction.Size];
-        //    fixed(byte* r = &result[0])
-        //    {
-        //        var p = r;
-        //        foreach(var instruction in instructions)
-        //        {
-        //            if(instruction.Code.Size > 1)
-        //                *p++ = (byte)(instruction.Code.Value >> 8);
-        //            *p++ = (byte)(instruction.Code.Value & 0xFF);
-        //            switch(instruction.Code.OperandType)
-        //            {
-        //            case OperandType.InlineBrTarget:
-        //                {
-        //                    var diff = instruction.Offset - (int)instruction.Operand;
-        //                    *(int*)p = diff;
-        //                    p += 4;
-        //                }
-        //                break;
-        //            case OperandType.InlineField:
-        //                {
-        //                    var field = (FieldInfo)instruction.Operand;
-        //                    var metadataToken = dynamicIlInfo.GetTokenFor(field.FieldHandle);
-        //                    *(int*)p = metadataToken;
-        //                    p += 4;
-        //                }
-        //                break;
-        //            case OperandType.InlineI:
-        //                {
-        //                    var value = (int)instruction.Operand;
-        //                    *(int*)p = value;
-        //                    p += 4;
-        //                }
-        //                break;
-        //            case OperandType.InlineI8:
-        //                {
-        //                    var value = (long)instruction.Operand;
-        //                    *(long*)p = value;
-        //                    p += 8;
-        //                }
-        //                break;
-        //            case OperandType.InlineMethod:
-        //                {
-        //                    var method = (MethodBase)instruction.Operand;
-        //                    var metadataToken = dynamicIlInfo.GetTokenFor(method.MethodHandle);
-        //                    *(int*)p = metadataToken;
-        //                    p += 4;
-        //                }
-        //                break;
-        //            case OperandType.InlineR:
-        //                {
-        //                    var value = (double)instruction.Operand;
-        //                    *(double*)p = value;
-        //                    p += 8;
-        //                }
-        //                break;
-        //            case OperandType.InlineSig:
-        //                {
-        //                    var signature = (byte[])instruction.Operand;
-        //                    var metadataToken = dynamicIlInfo.GetTokenFor(signature);
-        //                    *(int*)p = metadataToken;
-        //                    p += 4;
-        //                }
-        //                break;
-        //            case OperandType.InlineString:
-        //                {
-        //                    var str = (string)instruction.Operand;
-        //                    var metadataToken = dynamicIlInfo.GetTokenFor(str);
-        //                    *(int*)p = metadataToken;
-        //                    p += 4;
-        //                }
-        //                break;
-        //            case OperandType.InlineTok:
-        //                {
-        //                    int metadataToken;
-        //                    if(instruction.Operand is FieldInfo)
-        //                        metadataToken = dynamicIlInfo.GetTokenFor(((FieldInfo)instruction.Operand).FieldHandle);
-        //                    else if(instruction.Operand is MethodBase)
-        //                        metadataToken = dynamicIlInfo.GetTokenFor(((MethodBase)instruction.Operand).MethodHandle);
-        //                    else if(instruction.Operand is Type)
-        //                        metadataToken = dynamicIlInfo.GetTokenFor(((Type)instruction.Operand).TypeHandle);
-        //                    else throw new InvalidOperationException();
-        //                    *(int*)p = metadataToken;
-        //                    p += 4;
-        //                }
-        //                break;
-        //            case OperandType.InlineType:
-        //                {
-        //                    var metadataToken = dynamicIlInfo.GetTokenFor(((Type)instruction.Operand).TypeHandle);
-        //                    *(int*)p = metadataToken;
-        //                    p += 4;
-        //                }
-        //                break;
-        //            case OperandType.ShortInlineI:
-        //                {
-        //                    var metadataToken = (sbyte)instruction.OperandData;
-        //                    *(sbyte*)p = metadataToken;
-        //                    p += 1;
-        //                }
-        //                break;
-        //            case OperandType.InlineVar:
-        //                {
-        //                    var metadataToken = (short)instruction.OperandData;
-        //                    *(short*)p = metadataToken;
-        //                    p += 2;
-        //                }
-        //                break;
-        //            case OperandType.ShortInlineR:
-        //                {
-        //                    var metadataToken = (float)instruction.OperandData;
-        //                    *(float*)p = metadataToken;
-        //                    p += 2;
-        //                }
-        //                break;
-        //            case OperandType.ShortInlineVar:
-        //                {
-        //                    var metadataToken = (byte)instruction.OperandData;
-        //                    *(byte*)p = metadataToken;
-        //                    p += 1;
-        //                }
-        //                break;
-        //            case OperandType.ShortInlineBrTarget:
-        //                {
-        //                    var diff = instruction.Offset - (int)instruction.Operand;
-        //                    if(diff >= 128 || diff < -128)
-        //                        throw new InvalidOperationException();
-        //                    *(sbyte*)p = (sbyte)diff;
-        //                    p += 1;
-        //                }
-        //                break;
-        //            case OperandType.InlineSwitch:
-        //                throw new NotImplementedException();
-        //            }
-        //        }
-        //    }
-        //    var code = new MethodBodyReader(result, dynamicMethod.Module).GetBodyCode();
-        //    Console.WriteLine(code);
-        //    dynamicIlInfo.SetCode(result, maxStackSize);
-        //    dynamicIlInfo.SetLocalSignature(localSignature);
-        //    dynamicMethod.InitLocals = initLocals;
-        //}
 
-        public List<AbstractInstruction> instructions;
-        protected byte[] il;
-        private readonly MethodInfo mi;
-
-        #region il read methods
-
-        private int ReadInt16(ref int position)
-        {
-            position += 2;
-            return BitConverter.ToInt16(il, position - 2);
-        }
-
-        private ushort ReadUInt16(ref int position)
-        {
-            position += 2;
-            return BitConverter.ToUInt16(il, position - 2);
-        }
-
-        private int ReadInt32(ref int position)
-        {
-            position += 4;
-            return BitConverter.ToInt32(il, position - 4);
-        }
-
-        private long ReadInt64(ref int position)
-        {
-            position += 8;
-            return BitConverter.ToInt64(il, position - 8);
-        }
-
-        private double ReadDouble(ref int position)
-        {
-            position += 8;
-            return BitConverter.ToDouble(il, position - 8);
-        }
-
-        private sbyte ReadSByte(ref int position)
-        {
-            position += 1;
-            return (sbyte)il[position - 1];
-        }
-
-        private byte ReadByte(ref int position)
-        {
-            position += 1;
-            return il[position - 1];
-        }
-
-        private float ReadSingle(ref int position)
-        {
-            position += 4;
-            return BitConverter.ToSingle(il, position - 4);
-        }
-
-        #endregion
+        
+        
     }
 }

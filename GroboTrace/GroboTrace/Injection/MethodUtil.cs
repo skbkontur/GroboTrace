@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
@@ -35,7 +36,21 @@ namespace GroboTrace.Injection
             if(compareExchange2Words == null)
                 return false;
             var destAddr = GetMethodAddress(dest);
+
+            //var genericArguments = new Type[0];
+
+            //if (victim.DeclaringType.GetGenericArguments() != null)
+            //{
+            //    genericArguments = victim.DeclaringType.GetGenericArguments().ToArray();
+            //}
+
+            //if (victim.GetGenericArguments() != null)
+            //{
+            //    genericArguments = genericArguments.Concat(victim.GetGenericArguments()).ToArray();
+            //}
+
             RuntimeHelpers.PrepareMethod(victim.MethodHandle);
+            //RuntimeHelpers.PrepareMethod(victim.MethodHandle, victim.DeclaringType.GetGenericArguments().Concat(victim.GetGenericArguments()).Select(type => type.TypeHandle).ToArray());
             var victimAddr = GetMethodAddress(victim);
 
             bool canMakeRelJmp;
