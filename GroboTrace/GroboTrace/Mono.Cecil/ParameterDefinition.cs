@@ -9,12 +9,11 @@
 //
 
 using GroboTrace.Mono.Cecil.Metadata;
-using GroboTrace.Mono.Collections.Generic;
 
 namespace GroboTrace.Mono.Cecil
 {
 
-    public sealed class ParameterDefinition : ParameterReference, ICustomAttributeProvider, IConstantProvider, IMarshalInfoProvider
+    public sealed class ParameterDefinition : ParameterReference
     {
 
         ushort attributes;
@@ -22,8 +21,6 @@ namespace GroboTrace.Mono.Cecil
         internal IMethodSignature method;
 
         object constant = Mixin.NotResolved;
-        Collection<CustomAttribute> custom_attributes;
-        MarshalInfo marshal_info;
 
         public ParameterAttributes Attributes
         {
@@ -45,56 +42,6 @@ namespace GroboTrace.Mono.Cecil
 
                 return method.HasImplicitThis() ? index + 1 : index;
             }
-        }
-
-        public bool HasConstant
-        {
-            get
-            {
-                this.ResolveConstant(ref constant, parameter_type.Module);
-
-                return constant != Mixin.NoValue;
-            }
-            set { if (!value) constant = Mixin.NoValue; }
-        }
-
-        public object Constant
-        {
-            get { return HasConstant ? constant : null; }
-            set { constant = value; }
-        }
-
-        public bool HasCustomAttributes
-        {
-            get
-            {
-                if (custom_attributes != null)
-                    return custom_attributes.Count > 0;
-
-                return this.GetHasCustomAttributes(parameter_type.Module);
-            }
-        }
-
-        public Collection<CustomAttribute> CustomAttributes
-        {
-            get { return custom_attributes ?? (this.GetCustomAttributes(ref custom_attributes, parameter_type.Module)); }
-        }
-
-        public bool HasMarshalInfo
-        {
-            get
-            {
-                if (marshal_info != null)
-                    return true;
-
-                return this.GetHasMarshalInfo(parameter_type.Module);
-            }
-        }
-
-        public MarshalInfo MarshalInfo
-        {
-            get { return marshal_info ?? (this.GetMarshalInfo(ref marshal_info, parameter_type.Module)); }
-            set { marshal_info = value; }
         }
 
         #region ParameterAttributes
@@ -143,18 +90,18 @@ namespace GroboTrace.Mono.Cecil
 
         #endregion
 
-        internal ParameterDefinition(TypeReference parameterType, IMethodSignature method)
+        internal ParameterDefinition(MetadataToken parameterType, IMethodSignature method)
             : this(string.Empty, ParameterAttributes.None, parameterType)
         {
             this.method = method;
         }
 
-        public ParameterDefinition(TypeReference parameterType)
+        public ParameterDefinition(MetadataToken parameterType)
             : this(string.Empty, ParameterAttributes.None, parameterType)
         {
         }
 
-        public ParameterDefinition(string name, ParameterAttributes attributes, TypeReference parameterType)
+        public ParameterDefinition(string name, ParameterAttributes attributes, MetadataToken parameterType)
             : base(name, parameterType)
         {
             this.attributes = (ushort)attributes;

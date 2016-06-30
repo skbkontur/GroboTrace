@@ -751,16 +751,16 @@ namespace GroboTrace.Mono.Cecil.Cil {
 				break;
 			}
 			case OperandType.ShortInlineVar:
-				WriteByte ((byte) GetVariableIndex ((VariableDefinition) operand));
+				WriteByte ((byte) (int) operand);
 				break;
 			case OperandType.ShortInlineArg:
-				WriteByte ((byte) GetParameterIndex ((ParameterDefinition) operand));
+				WriteByte ((byte) (int) operand);
 				break;
 			case OperandType.InlineVar:
-				WriteInt16 ((short) GetVariableIndex ((VariableDefinition) operand));
+				WriteInt16 ((short) (int) operand);
 				break;
 			case OperandType.InlineArg:
-				WriteInt16 ((short) GetParameterIndex ((ParameterDefinition) operand));
+				WriteInt16 ((short) (int) operand);
 				break;
 			case OperandType.InlineSig:
 				WriteMetadataToken ((MetadataToken)operand);
@@ -807,24 +807,7 @@ namespace GroboTrace.Mono.Cecil.Cil {
 			return instruction.offset;
 		}
 
-		static int GetVariableIndex (VariableDefinition variable)
-		{
-			return variable.Index;
-		}
-
-		int GetParameterIndex (ParameterDefinition parameter)
-		{
-			if (body.method.HasThis) {
-				if (parameter == body.this_parameter)
-					return 0;
-
-				return parameter.Index + 1;
-			}
-
-			return parameter.Index;
-		}
-
-		bool RequiresFatHeader ()
+	    bool RequiresFatHeader ()
 		{
 			var body = this.body;
 			return body.CodeSize >= 64

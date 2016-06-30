@@ -8,20 +8,18 @@
 // Licensed under the MIT/X11 license.
 //
 
+using GroboTrace.Mono.Cecil.Metadata;
+
 namespace GroboTrace.Mono.Cecil.Cil {
 
 	public sealed class VariableDefinition : VariableReference {
 
-		public bool IsPinned {
-			get { return variable_type.IsPinned; }
-		}
-
-		public VariableDefinition (TypeReference variableType)
+		public VariableDefinition (MetadataToken variableType)
 			: base (variableType)
 		{
 		}
 
-		public VariableDefinition (string name, TypeReference variableType)
+        public VariableDefinition(string name, MetadataToken variableType)
 			: base (name, variableType)
 		{
 		}

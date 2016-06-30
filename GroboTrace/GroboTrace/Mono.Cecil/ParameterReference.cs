@@ -18,7 +18,7 @@ namespace GroboTrace.Mono.Cecil {
 
 		string name;
 		internal int index = -1;
-		protected TypeReference parameter_type;
+        protected MetadataToken parameter_type;
 		internal MetadataToken token;
 
 		public string Name {
@@ -30,7 +30,8 @@ namespace GroboTrace.Mono.Cecil {
 			get { return index; }
 		}
 
-		public TypeReference ParameterType {
+        public MetadataToken ParameterType
+        {
 			get { return parameter_type; }
 			set { parameter_type = value; }
 		}
@@ -40,7 +41,7 @@ namespace GroboTrace.Mono.Cecil {
 			set { token = value; }
 		}
 
-		internal ParameterReference (string name, TypeReference parameterType)
+        internal ParameterReference(string name, MetadataToken parameterType)
 		{
 			if (parameterType == null)
 				throw new ArgumentNullException ("parameterType");

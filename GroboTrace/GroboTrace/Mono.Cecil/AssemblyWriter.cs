@@ -732,7 +732,7 @@ namespace GroboTrace.Mono.Cecil {
 			this.symbol_writer_provider = symbol_writer_provider;
 			this.symbol_writer = symbol_writer;
 			this.write_symbols = symbol_writer != null;
-			this.code = new CodeWriter (this);
+			//this.code = new CodeWriter (this);
 			this.data = new DataBuffer ();
 			this.resources = new ResourceBuffer ();
 			this.string_heap = new StringHeapBuffer ();

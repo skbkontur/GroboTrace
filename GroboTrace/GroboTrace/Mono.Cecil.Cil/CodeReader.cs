@@ -10,7 +10,6 @@
 
 using System;
 using System.Reflection;
-using System.Text;
 
 using GroboTrace.Mono.Cecil.Metadata;
 using GroboTrace.Mono.Cecil.PE;
@@ -267,154 +266,6 @@ namespace GroboTrace.Mono.Cecil.Cil {
                 parameters.Add(new ParameterDefinition(ReadTypeSignature()));
         }
 
-        public object ReadConstantSignature(ElementType type)
-        {
-            return ReadPrimitiveValue(type);
-        }
-
-        public void ReadCustomAttributeConstructorArguments(CustomAttribute attribute, Collection<ParameterDefinition> parameters)
-        {
-            var count = parameters.Count;
-            if (count == 0)
-                return;
-
-            attribute.arguments = new Collection<CustomAttributeArgument>(count);
-
-            for (int i = 0; i < count; i++)
-                attribute.arguments.Add(
-                    ReadCustomAttributeFixedArgument(parameters[i].ParameterType));
-        }
-
-        CustomAttributeArgument ReadCustomAttributeFixedArgument(TypeReference type)
-        {
-            if (type.IsArray)
-                return ReadCustomAttributeFixedArrayArgument((ArrayType)type);
-
-            return ReadCustomAttributeElement(type);
-        }
-
-        public void ReadCustomAttributeNamedArguments(ushort count, ref Collection<CustomAttributeNamedArgument> fields, ref Collection<CustomAttributeNamedArgument> properties)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                if (!CanReadMore())
-                    return;
-                ReadCustomAttributeNamedArgument(ref fields, ref properties);
-            }
-        }
-
-        void ReadCustomAttributeNamedArgument(ref Collection<CustomAttributeNamedArgument> fields, ref Collection<CustomAttributeNamedArgument> properties)
-        {
-            var kind = ReadByte();
-            var type = ReadCustomAttributeFieldOrPropType();
-            var name = ReadUTF8String();
-
-            Collection<CustomAttributeNamedArgument> container;
-            switch (kind)
-            {
-                case 0x53:
-                    container = GetCustomAttributeNamedArgumentCollection(ref fields);
-                    break;
-                case 0x54:
-                    container = GetCustomAttributeNamedArgumentCollection(ref properties);
-                    break;
-                default:
-                    throw new NotSupportedException();
-            }
-
-            container.Add(new CustomAttributeNamedArgument(name, ReadCustomAttributeFixedArgument(type)));
-        }
-
-        static Collection<CustomAttributeNamedArgument> GetCustomAttributeNamedArgumentCollection(ref Collection<CustomAttributeNamedArgument> collection)
-        {
-            if (collection != null)
-                return collection;
-
-            return collection = new Collection<CustomAttributeNamedArgument>();
-        }
-
-        CustomAttributeArgument ReadCustomAttributeFixedArrayArgument(ArrayType type)
-        {
-            var length = ReadUInt32();
-
-            if (length == 0xffffffff)
-                return new CustomAttributeArgument(type, null);
-
-            if (length == 0)
-                return new CustomAttributeArgument(type, Empty<CustomAttributeArgument>.Array);
-
-            var arguments = new CustomAttributeArgument[length];
-            var element_type = type.ElementType;
-
-            for (int i = 0; i < length; i++)
-                arguments[i] = ReadCustomAttributeElement(element_type);
-
-            return new CustomAttributeArgument(type, arguments);
-        }
-
-        CustomAttributeArgument ReadCustomAttributeElement(TypeReference type)
-        {
-            if (type.IsArray)
-                return ReadCustomAttributeFixedArrayArgument((ArrayType)type);
-
-            return new CustomAttributeArgument(
-                type,
-                type.etype == ElementType.Object
-                    ? ReadCustomAttributeElement(ReadCustomAttributeFieldOrPropType())
-                    : ReadCustomAttributeElementValue(type));
-        }
-
-        object ReadCustomAttributeElementValue(TypeReference type)
-        {
-            var etype = type.etype;
-
-            switch (etype)
-            {
-                case ElementType.String:
-                    return ReadUTF8String();
-                case ElementType.None:
-                    if (type.IsTypeOf("System", "Type"))
-                        return ReadTypeReference();
-
-                    return ReadCustomAttributeEnum(type);
-                default:
-                    return ReadPrimitiveValue(etype);
-            }
-        }
-
-        object ReadPrimitiveValue(ElementType type)
-        {
-            switch (type)
-            {
-                case ElementType.Boolean:
-                    return ReadByte() == 1;
-                case ElementType.I1:
-                    return (sbyte)ReadByte();
-                case ElementType.U1:
-                    return ReadByte();
-                case ElementType.Char:
-                    return (char)ReadUInt16();
-                case ElementType.I2:
-                    return ReadInt16();
-                case ElementType.U2:
-                    return ReadUInt16();
-                case ElementType.I4:
-                    return ReadInt32();
-                case ElementType.U4:
-                    return ReadUInt32();
-                case ElementType.I8:
-                    return ReadInt64();
-                case ElementType.U8:
-                    return ReadUInt64();
-                case ElementType.R4:
-                    return ReadSingle();
-                case ElementType.R8:
-                    return ReadDouble();
-                default:
-                    throw new NotImplementedException(type.ToString());
-            }
-        }
-
         TypeReference GetPrimitiveType(ElementType etype)
         {
             switch (etype)
@@ -448,143 +299,6 @@ namespace GroboTrace.Mono.Cecil.Cil {
                 default:
                     throw new NotImplementedException(etype.ToString());
             }
-        }
-
-        TypeReference ReadCustomAttributeFieldOrPropType()
-        {
-            var etype = (ElementType)ReadByte();
-
-            switch (etype)
-            {
-                case ElementType.Boxed:
-                    return TypeSystem.Object;
-                case ElementType.SzArray:
-                    return new ArrayType(ReadCustomAttributeFieldOrPropType());
-                case ElementType.Enum:
-                    return ReadTypeReference();
-                case ElementType.Type:
-                    return TypeSystem.LookupType("System", "Type");
-                default:
-                    return GetPrimitiveType(etype);
-            }
-        }
-
-        public TypeReference ReadTypeReference()
-        {
-            return TypeParser.ParseType(reader.module, ReadUTF8String());
-        }
-
-        object ReadCustomAttributeEnum(TypeReference enum_type)
-        {
-            var type = enum_type.CheckedResolve();
-            if (!type.IsEnum)
-                throw new ArgumentException();
-
-            return ReadCustomAttributeElementValue(type.GetEnumUnderlyingType());
-        }
-
-        public SecurityAttribute ReadSecurityAttribute()
-        {
-            var attribute = new SecurityAttribute(ReadTypeReference());
-
-            ReadCompressedUInt32();
-
-            ReadCustomAttributeNamedArguments(
-                (ushort)ReadCompressedUInt32(),
-                ref attribute.fields,
-                ref attribute.properties);
-
-            return attribute;
-        }
-
-        public MarshalInfo ReadMarshalInfo()
-        {
-            var native = ReadNativeType();
-            switch (native)
-            {
-                case NativeType.Array:
-                    {
-                        var array = new ArrayMarshalInfo();
-                        if (CanReadMore())
-                            array.element_type = ReadNativeType();
-                        if (CanReadMore())
-                            array.size_parameter_index = (int)ReadCompressedUInt32();
-                        if (CanReadMore())
-                            array.size = (int)ReadCompressedUInt32();
-                        if (CanReadMore())
-                            array.size_parameter_multiplier = (int)ReadCompressedUInt32();
-                        return array;
-                    }
-                case NativeType.SafeArray:
-                    {
-                        var array = new SafeArrayMarshalInfo();
-                        if (CanReadMore())
-                            array.element_type = ReadVariantType();
-                        return array;
-                    }
-                case NativeType.FixedArray:
-                    {
-                        var array = new FixedArrayMarshalInfo();
-                        if (CanReadMore())
-                            array.size = (int)ReadCompressedUInt32();
-                        if (CanReadMore())
-                            array.element_type = ReadNativeType();
-                        return array;
-                    }
-                case NativeType.FixedSysString:
-                    {
-                        var sys_string = new FixedSysStringMarshalInfo();
-                        if (CanReadMore())
-                            sys_string.size = (int)ReadCompressedUInt32();
-                        return sys_string;
-                    }
-                case NativeType.CustomMarshaler:
-                    {
-                        var marshaler = new CustomMarshalInfo();
-                        var guid_value = ReadUTF8String();
-                        marshaler.guid = !string.IsNullOrEmpty(guid_value) ? new Guid(guid_value) : Guid.Empty;
-                        marshaler.unmanaged_type = ReadUTF8String();
-                        marshaler.managed_type = ReadTypeReference();
-                        marshaler.cookie = ReadUTF8String();
-                        return marshaler;
-                    }
-                default:
-                    return new MarshalInfo(native);
-            }
-        }
-
-        NativeType ReadNativeType()
-        {
-            return (NativeType)ReadByte();
-        }
-
-        VariantType ReadVariantType()
-        {
-            return (VariantType)ReadByte();
-        }
-
-        string ReadUTF8String()
-        {
-            if (buffer[position] == 0xff)
-            {
-                position++;
-                return null;
-            }
-
-            var length = (int)ReadCompressedUInt32();
-            if (length == 0)
-                return string.Empty;
-
-            var @string = Encoding.UTF8.GetString(buffer, position,
-                buffer[position + length - 1] == 0 ? length - 1 : length);
-
-            position += length;
-            return @string;
-        }
-
-        public bool CanReadMore()
-        {
-            return position - start < sig_length;
         }
     }
 
@@ -648,7 +362,7 @@ namespace GroboTrace.Mono.Cecil.Cil {
 			body.init_locals = (flags & 0x10) != 0;
 
 			if (body.local_var_token.RID != 0)
-				body.variables = ReadVariables (body.local_var_token);
+				ReadVariables (body.local_var_token);
 
 			ReadCode ();
 
@@ -656,9 +370,8 @@ namespace GroboTrace.Mono.Cecil.Cil {
 				ReadSection ();
 		}
 
-		public VariableDefinitionCollection ReadVariables (MetadataToken local_var_token)
+		public void ReadVariables (MetadataToken local_var_token)
 		{
-			var position = reader.position;
 		    var signature = module.ResolveSignature(local_var_token.ToInt32());
 		    reader.data = signature;
 
@@ -668,17 +381,12 @@ namespace GroboTrace.Mono.Cecil.Cil {
                 throw new NotSupportedException();
 
             var count = reader.ReadCompressedUInt32();
+		    body.variablesCount = count;
             if (count == 0)
-                return null;
+                return;
 
-            var variables = new VariableDefinitionCollection((int)count);
-
-            for (int i = 0; i < count; i++)
-                variables.Add(new VariableDefinition(reader.ReadTypeSignature()));
-
-			reader.position = position;
-
-			return variables;
+		    body.variablesSignature = new byte[signature.Length - reader.position];
+            Array.Copy(signature, reader.position, body.variablesSignature, 0, body.variablesSignature.Length);
 		}
 
 		void ReadCode ()
@@ -742,13 +450,13 @@ namespace GroboTrace.Mono.Cecil.Cil {
 			case OperandType.InlineI8:
 				return ReadInt64 ();
 			case OperandType.ShortInlineVar:
-				return GetVariable (ReadByte ());
+				return (int)ReadByte ();
 			case OperandType.InlineVar:
-				return GetVariable (ReadUInt16 ());
+				return (int)ReadUInt16 ();
 			case OperandType.ShortInlineArg:
-				return GetParameter (ReadByte ());
+				return (int)ReadByte ();
 			case OperandType.InlineArg:
-				return GetParameter (ReadUInt16 ());
+				return (int)ReadUInt16 ();
 			case OperandType.InlineSig:
 				return ReadToken ();
 			case OperandType.InlineString:
@@ -763,17 +471,7 @@ namespace GroboTrace.Mono.Cecil.Cil {
 			}
 		}
 
-		public ParameterDefinition GetParameter (int index)
-		{
-			return body.GetParameter (index);
-		}
-
-		public VariableDefinition GetVariable (int index)
-		{
-			return body.GetVariable (index);
-		}
-
-		void ResolveBranches (Collection<Instruction> instructions)
+	    void ResolveBranches (Collection<Instruction> instructions)
 		{
 			var items = instructions.items;
 			var size = instructions.size;

@@ -389,7 +389,7 @@ namespace GroboTrace.Mono.Cecil {
 			this.image = module.Image;
 			this.module = module;
 			this.metadata = module.MetadataSystem;
-			this.code = new CodeReader (image.MetadataSection, this);
+			//this.code = new CodeReader (image.MetadataSection, this);
 		}
 
 		int GetCodedIndexSize (CodedIndex index)

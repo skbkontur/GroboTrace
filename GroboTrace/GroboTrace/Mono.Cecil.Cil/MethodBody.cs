@@ -28,7 +28,8 @@ namespace GroboTrace.Mono.Cecil.Cil {
 
 		internal Collection<Instruction> instructions;
 		internal Collection<ExceptionHandler> exceptions;
-		internal Collection<VariableDefinition> variables;
+		internal byte[] variablesSignature;
+	    internal uint variablesCount;
 		Scope scope;
 
 		public MethodDefinition Method {
