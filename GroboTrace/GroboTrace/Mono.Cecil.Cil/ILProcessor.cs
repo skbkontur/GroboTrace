@@ -80,16 +80,6 @@ namespace GroboTrace.Mono.Cecil.Cil {
 			return Instruction.Create (opcode, targets);
 		}
 
-		public Instruction Create (OpCode opcode, VariableDefinition variable)
-		{
-			return Instruction.Create (opcode, variable);
-		}
-
-		public Instruction Create (OpCode opcode, ParameterDefinition parameter)
-		{
-			return Instruction.Create (opcode, parameter);
-		}
-
 		public void Emit (OpCode opcode)
 		{
 			Append (Create (opcode));
@@ -138,16 +128,6 @@ namespace GroboTrace.Mono.Cecil.Cil {
 		public void Emit (OpCode opcode, Instruction [] targets)
 		{
 			Append (Create (opcode, targets));
-		}
-
-		public void Emit (OpCode opcode, VariableDefinition variable)
-		{
-			Append (Create (opcode, variable));
-		}
-
-		public void Emit (OpCode opcode, ParameterDefinition parameter)
-		{
-			Append (Create (opcode, parameter));
 		}
 
 		public void InsertBefore (Instruction target, Instruction instruction)

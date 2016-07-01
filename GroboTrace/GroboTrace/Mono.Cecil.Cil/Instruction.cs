@@ -227,27 +227,5 @@ namespace GroboTrace.Mono.Cecil.Cil {
 
 			return new Instruction (opcode, targets);
 		}
-
-		public static Instruction Create (OpCode opcode, VariableDefinition variable)
-		{
-			if (variable == null)
-				throw new ArgumentNullException ("variable");
-			if (opcode.OperandType != OperandType.ShortInlineVar &&
-				opcode.OperandType != OperandType.InlineVar)
-				throw new ArgumentException ("opcode");
-
-			return new Instruction (opcode, variable);
-		}
-
-		public static Instruction Create (OpCode opcode, ParameterDefinition parameter)
-		{
-			if (parameter == null)
-				throw new ArgumentNullException ("parameter");
-			if (opcode.OperandType != OperandType.ShortInlineArg &&
-				opcode.OperandType != OperandType.InlineArg)
-				throw new ArgumentException ("opcode");
-
-			return new Instruction (opcode, parameter);
-		}
 	}
 }
