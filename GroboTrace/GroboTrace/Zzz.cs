@@ -12,7 +12,7 @@ namespace GroboTrace
         public static byte* Trace(byte* rawMethodBody)
         {
             Module module = ???;
-            var methodBody = new CodeReader(rawMethodBody, null).ReadMethodBody();
+            var methodBody = new CodeReader(rawMethodBody, module).ReadMethodBody();
             
             // actions with methodBody
 

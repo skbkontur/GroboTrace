@@ -10,471 +10,321 @@
 
 using System;
 using System.Reflection;
-using System.Runtime.InteropServices;
 
 using GroboTrace.Mono.Cecil.Metadata;
 using GroboTrace.Mono.Cecil.PE;
 using GroboTrace.Mono.Collections.Generic;
 
-using RVA = System.UInt32;
-
-namespace GroboTrace.Mono.Cecil.Cil {
-
-    internal sealed unsafe class MethodReturnTypeReader : RawByteBuffer
+namespace GroboTrace.Mono.Cecil.Cil
+{
+    internal sealed unsafe class CodeReader : RawByteBuffer
     {
-        public MethodReturnTypeReader(byte* buffer)
-            : base(buffer)
-        {
-        }
-
-        public byte[] ReadReturnTypeSignature()
-        {
-            var calling_convention = ReadByte();
-
-            if ((calling_convention & 0x10) != 0)
-            {
-                // arity
-                ReadCompressedUInt32();
-            }
-
-            // param_count
-            ReadCompressedUInt32();
-
-            int start = position;
-            ReadTypeSignature();
-            int end = position;
-            var result = new byte[end - start];
-            Marshal.Copy((IntPtr)(buffer + start), result, 0, result.Length);
-            return result;
-        }
-
-        void ReadTypeSignature()
-        {
-            ReadTypeSignature((ElementType)ReadByte());
-        }
-
-        void ReadTypeTokenSignature()
-        {
-            ReadCompressedUInt32();
-        }
-
-        void ReadMethodSignature()
-        {
-            var calling_convention = ReadByte();
-
-            if ((calling_convention & 0x10) != 0)
-            {
-                // arity
-                ReadCompressedUInt32();
-            }
-
-            var param_count = ReadCompressedUInt32();
-
-            // return type
-            ReadTypeSignature();
-
-            if (param_count == 0)
-                return;
-
-            for (int i = 0; i < param_count; i++)
-                ReadTypeSignature();
-        }
-
-
-        void ReadTypeSignature(ElementType etype)
-        {
-            switch (etype)
-            {
-            case ElementType.ValueType:
-                ReadTypeTokenSignature();
-                break;
-            case ElementType.Class:
-                ReadTypeTokenSignature();
-                break;
-            case ElementType.Ptr:
-                ReadTypeSignature();
-                break;
-            case ElementType.FnPtr:
-                ReadMethodSignature();
-                return;
-            case ElementType.ByRef:
-                ReadTypeSignature();
-                break;
-            case ElementType.Pinned:
-                ReadTypeSignature();
-                break;
-            case ElementType.SzArray:
-                ReadTypeSignature();
-                break;
-            case ElementType.Array:
-                ReadArrayTypeSignature();
-                break;
-            case ElementType.CModOpt:
-                ReadTypeTokenSignature();
-                ReadTypeSignature();
-                break;
-            case ElementType.CModReqD:
-                ReadTypeTokenSignature();
-                ReadTypeSignature();
-                break;
-            case ElementType.Sentinel:
-                ReadTypeSignature();
-                break;
-            case ElementType.Var:
-                ReadCompressedUInt32();
-                break;
-            case ElementType.MVar:
-                ReadCompressedUInt32();
-                break;
-            case ElementType.GenericInst:
-                {
-                    // attrs
-                    ReadByte();
-                    // element_type
-                    ReadTypeTokenSignature();
-
-                    ReadGenericInstanceSignature();
-                    break;
-                }
-            default:
-                ReadBuiltInType();
-                break;
-            }
-        }
-
-        void ReadGenericInstanceSignature()
-        {
-            var arity = ReadCompressedUInt32();
-
-            for (int i = 0; i < arity; i++)
-                ReadTypeSignature();
-        }
-
-        void ReadArrayTypeSignature()
-        {
-            // element_type
-            ReadTypeSignature();
-
-            // rank
-            ReadCompressedUInt32();
-
-            var sizes = ReadCompressedUInt32();
-            for (int i = 0; i < sizes; i++)
-                ReadCompressedUInt32();
-
-            var low_bounds = ReadCompressedUInt32();
-            for (int i = 0; i < low_bounds; i++)
-                ReadCompressedInt32();
-        }
-
-        private void ReadBuiltInType()
-        {
-
-        }
-    }
-
-
-    sealed unsafe class CodeReader : RawByteBuffer {
-	    private readonly Module module;
-
-		int start;
-
-		MethodBody body;
-
-		int Offset {
-			get { return base.position - start; }
-		}
-
         public CodeReader(byte* data, Module module)
-			: base (data)
-		{
-		    this.module = module;
-		}
+            : base(data)
+        {
+            this.module = module;
+        }
 
-	    public MethodBody ReadMethodBody ()
-		{
-			this.body = new MethodBody ();
+        private int Offset { get { return position - start; } }
 
-			ReadMethodBodyInternal ();
+        public MethodBody ReadMethodBody()
+        {
+            body = new MethodBody();
 
-			return this.body;
-		}
+            ReadMethodBodyInternal();
 
-	    void ReadMethodBodyInternal ()
-		{
-	        position = 0;
+            return body;
+        }
 
-	        var flags = ReadByte ();
-			switch (flags & 0x3) {
-			case 0x2: // tiny
-				body.code_size = flags >> 2;
-				body.MaxStackSize = 8;
-				ReadCode ();
-				break;
-			case 0x3: // fat
-				base.position--;
-				ReadFatMethod ();
-				break;
-			default:
-				throw new InvalidOperationException ();
-			}
-		}
+        private void ReadMethodBodyInternal()
+        {
+            position = 0;
 
-		void ReadFatMethod ()
-		{
-			var flags = ReadUInt16 ();
-			body.max_stack_size = ReadUInt16 ();
-			body.code_size = (int) ReadUInt32 ();
-			body.local_var_token = new MetadataToken (ReadUInt32 ());
-			body.init_locals = (flags & 0x10) != 0;
+            var flags = ReadByte();
+            switch(flags & 0x3)
+            {
+            case 0x2: // tiny
+                body.code_size = flags >> 2;
+                body.MaxStackSize = 8;
+                ReadCode();
+                break;
+            case 0x3: // fat
+                base.position--;
+                ReadFatMethod();
+                break;
+            default:
+                throw new InvalidOperationException();
+            }
+        }
 
-			if (body.local_var_token.RID != 0)
-				ReadVariables (body.local_var_token);
+        private void ReadFatMethod()
+        {
+            var flags = ReadUInt16();
+            body.max_stack_size = ReadUInt16();
+            body.code_size = (int)ReadUInt32();
+            body.local_var_token = new MetadataToken(ReadUInt32());
+            body.init_locals = (flags & 0x10) != 0;
 
-			ReadCode ();
+            if(body.local_var_token.RID != 0)
+                ReadVariables(body.local_var_token);
 
-			if ((flags & 0x8) != 0)
-				ReadSection ();
-		}
+            ReadCode();
 
-		public void ReadVariables (MetadataToken local_var_token)
-		{
-		    var signature = module.ResolveSignature(local_var_token.ToInt32());
-		    var reader = new ByteBuffer(signature);
+            if((flags & 0x8) != 0)
+                ReadSection();
+        }
+
+        public void ReadVariables(MetadataToken local_var_token)
+        {
+            var signature = module.ResolveSignature(local_var_token.ToInt32());
+            var reader = new ByteBuffer(signature);
 
             const byte local_sig = 0x7;
 
-            if (reader.ReadByte() != local_sig)
+            if(reader.ReadByte() != local_sig)
                 throw new NotSupportedException();
 
             var count = reader.ReadCompressedUInt32();
-		    body.variablesCount = count;
-            if (count == 0)
+            body.variablesCount = count;
+            if(count == 0)
                 return;
 
-		    body.variablesSignature = new byte[signature.Length - reader.position];
+            body.variablesSignature = new byte[signature.Length - reader.position];
             Array.Copy(signature, reader.position, body.variablesSignature, 0, body.variablesSignature.Length);
-		}
+        }
 
-		void ReadCode ()
-		{
-			start = position;
-			var code_size = body.code_size;
+        private void ReadCode()
+        {
+            start = position;
+            var code_size = body.code_size;
 
-			if (code_size < 0/* || buffer.Length <= (uint) (code_size + position)*/)
-				code_size = 0;
+            if(code_size < 0 /* || buffer.Length <= (uint) (code_size + position)*/)
+                code_size = 0;
 
-			var end = start + code_size;
-			var instructions = body.instructions = new InstructionCollection ((code_size + 1) / 2);
+            var end = start + code_size;
+            var instructions = body.instructions = new InstructionCollection((code_size + 1) / 2);
 
-			while (position < end) {
-				var offset = base.position - start;
-				var opcode = ReadOpCode ();
-				var current = new Instruction (offset, opcode);
+            while(position < end)
+            {
+                var offset = base.position - start;
+                var opcode = ReadOpCode();
+                var current = new Instruction(offset, opcode);
 
-				if (opcode.OperandType != OperandType.InlineNone)
-					current.operand = ReadOperand (current);
+                if(opcode.OperandType != OperandType.InlineNone)
+                    current.operand = ReadOperand(current);
 
-				instructions.Add (current);
-			}
+                instructions.Add(current);
+            }
 
-			ResolveBranches (instructions);
-		}
+            ResolveBranches(instructions);
+        }
 
-		OpCode ReadOpCode ()
-		{
-			var il_opcode = ReadByte ();
-			return il_opcode != 0xfe
-				? OpCodes.OneByteOpCode [il_opcode]
-				: OpCodes.TwoBytesOpCode [ReadByte ()];
-		}
+        private OpCode ReadOpCode()
+        {
+            var il_opcode = ReadByte();
+            return il_opcode != 0xfe
+                       ? OpCodes.OneByteOpCode[il_opcode]
+                       : OpCodes.TwoBytesOpCode[ReadByte()];
+        }
 
-		object ReadOperand (Instruction instruction)
-		{
-			switch (instruction.opcode.OperandType) {
-			case OperandType.InlineSwitch:
-				var length = ReadInt32 ();
-				var base_offset = Offset + (4 * length);
-				var branches = new int [length];
-				for (int i = 0; i < length; i++)
-					branches [i] = base_offset + ReadInt32 ();
-				return branches;
-			case OperandType.ShortInlineBrTarget:
-				return ReadSByte () + Offset;
-			case OperandType.InlineBrTarget:
-				return ReadInt32 () + Offset;
-			case OperandType.ShortInlineI:
-				if (instruction.opcode == OpCodes.Ldc_I4_S)
-					return ReadSByte ();
+        private object ReadOperand(Instruction instruction)
+        {
+            switch(instruction.opcode.OperandType)
+            {
+            case OperandType.InlineSwitch:
+                var length = ReadInt32();
+                var base_offset = Offset + (4 * length);
+                var branches = new int[length];
+                for(int i = 0; i < length; i++)
+                    branches[i] = base_offset + ReadInt32();
+                return branches;
+            case OperandType.ShortInlineBrTarget:
+                return ReadSByte() + Offset;
+            case OperandType.InlineBrTarget:
+                return ReadInt32() + Offset;
+            case OperandType.ShortInlineI:
+                if(instruction.opcode == OpCodes.Ldc_I4_S)
+                    return ReadSByte();
 
-				return ReadByte ();
-			case OperandType.InlineI:
-				return ReadInt32 ();
-			case OperandType.ShortInlineR:
-				return ReadSingle ();
-			case OperandType.InlineR:
-				return ReadDouble ();
-			case OperandType.InlineI8:
-				return ReadInt64 ();
-			case OperandType.ShortInlineVar:
-				return (int)ReadByte ();
-			case OperandType.InlineVar:
-				return (int)ReadUInt16 ();
-			case OperandType.ShortInlineArg:
-				return (int)ReadByte ();
-			case OperandType.InlineArg:
-				return (int)ReadUInt16 ();
-			case OperandType.InlineSig:
-				return ReadToken ();
-			case OperandType.InlineString:
-				return ReadToken ();
-			case OperandType.InlineTok:
-			case OperandType.InlineType:
-			case OperandType.InlineMethod:
-			case OperandType.InlineField:
-				return ReadToken ();
-			default:
-				throw new NotSupportedException ();
-			}
-		}
+                return ReadByte();
+            case OperandType.InlineI:
+                return ReadInt32();
+            case OperandType.ShortInlineR:
+                return ReadSingle();
+            case OperandType.InlineR:
+                return ReadDouble();
+            case OperandType.InlineI8:
+                return ReadInt64();
+            case OperandType.ShortInlineVar:
+                return (int)ReadByte();
+            case OperandType.InlineVar:
+                return (int)ReadUInt16();
+            case OperandType.ShortInlineArg:
+                return (int)ReadByte();
+            case OperandType.InlineArg:
+                return (int)ReadUInt16();
+            case OperandType.InlineSig:
+                return ReadToken();
+            case OperandType.InlineString:
+                return ReadToken();
+            case OperandType.InlineTok:
+            case OperandType.InlineType:
+            case OperandType.InlineMethod:
+            case OperandType.InlineField:
+                return ReadToken();
+            default:
+                throw new NotSupportedException();
+            }
+        }
 
-	    void ResolveBranches (Collection<Instruction> instructions)
-		{
-			var items = instructions.items;
-			var size = instructions.size;
+        private void ResolveBranches(Collection<Instruction> instructions)
+        {
+            var items = instructions.items;
+            var size = instructions.size;
 
-			for (int i = 0; i < size; i++) {
-				var instruction = items [i];
-				switch (instruction.opcode.OperandType) {
-				case OperandType.ShortInlineBrTarget:
-				case OperandType.InlineBrTarget:
-					instruction.operand = GetInstruction ((int) instruction.operand);
-					break;
-				case OperandType.InlineSwitch:
-					var offsets = (int []) instruction.operand;
-					var branches = new Instruction [offsets.Length];
-					for (int j = 0; j < offsets.Length; j++)
-						branches [j] = GetInstruction (offsets [j]);
+            for(int i = 0; i < size; i++)
+            {
+                var instruction = items[i];
+                switch(instruction.opcode.OperandType)
+                {
+                case OperandType.ShortInlineBrTarget:
+                case OperandType.InlineBrTarget:
+                    instruction.operand = GetInstruction((int)instruction.operand);
+                    break;
+                case OperandType.InlineSwitch:
+                    var offsets = (int[])instruction.operand;
+                    var branches = new Instruction[offsets.Length];
+                    for(int j = 0; j < offsets.Length; j++)
+                        branches[j] = GetInstruction(offsets[j]);
 
-					instruction.operand = branches;
-					break;
-				}
-			}
-		}
+                    instruction.operand = branches;
+                    break;
+                }
+            }
+        }
 
-		Instruction GetInstruction (int offset)
-		{
-			return GetInstruction (body.Instructions, offset);
-		}
+        private Instruction GetInstruction(int offset)
+        {
+            return GetInstruction(body.Instructions, offset);
+        }
 
-		static Instruction GetInstruction (Collection<Instruction> instructions, int offset)
-		{
-			var size = instructions.size;
-			var items = instructions.items;
-			if (offset < 0 || offset > items [size - 1].offset)
-				return null;
+        private static Instruction GetInstruction(Collection<Instruction> instructions, int offset)
+        {
+            var size = instructions.size;
+            var items = instructions.items;
+            if(offset < 0 || offset > items[size - 1].offset)
+                return null;
 
-			int min = 0;
-			int max = size - 1;
-			while (min <= max) {
-				int mid = min + ((max - min) / 2);
-				var instruction = items [mid];
-				var instruction_offset = instruction.offset;
+            int min = 0;
+            int max = size - 1;
+            while(min <= max)
+            {
+                int mid = min + ((max - min) / 2);
+                var instruction = items[mid];
+                var instruction_offset = instruction.offset;
 
-				if (offset == instruction_offset)
-					return instruction;
+                if(offset == instruction_offset)
+                    return instruction;
 
-				if (offset < instruction_offset)
-					max = mid - 1;
-				else
-					min = mid + 1;
-			}
+                if(offset < instruction_offset)
+                    max = mid - 1;
+                else
+                    min = mid + 1;
+            }
 
-			return null;
-		}
+            return null;
+        }
 
-		void ReadSection ()
-		{
-			Align (4);
+        private void ReadSection()
+        {
+            Align(4);
 
-			const byte fat_format = 0x40;
-			const byte more_sects = 0x80;
+            const byte fat_format = 0x40;
+            const byte more_sects = 0x80;
 
-			var flags = ReadByte ();
-			if ((flags & fat_format) == 0)
-				ReadSmallSection ();
-			else
-				ReadFatSection ();
+            var flags = ReadByte();
+            if((flags & fat_format) == 0)
+                ReadSmallSection();
+            else
+                ReadFatSection();
 
-			if ((flags & more_sects) != 0)
-				ReadSection ();
-		}
+            if((flags & more_sects) != 0)
+                ReadSection();
+        }
 
-		void ReadSmallSection ()
-		{
-			var count = ReadByte () / 12;
-			Advance (2);
+        private void ReadSmallSection()
+        {
+            var count = ReadByte() / 12;
+            Advance(2);
 
-			ReadExceptionHandlers (
-				count,
-				() => (int) ReadUInt16 (),
-				() => (int) ReadByte ());
-		}
+            ReadExceptionHandlers(
+                count,
+                () => (int)ReadUInt16(),
+                () => (int)ReadByte());
+        }
 
-		void ReadFatSection ()
-		{
-			position--;
-			var count = (ReadInt32 () >> 8) / 24;
+        private void ReadFatSection()
+        {
+            position--;
+            var count = (ReadInt32() >> 8) / 24;
 
-			ReadExceptionHandlers (
-				count,
-				ReadInt32,
-				ReadInt32);
-		}
+            ReadExceptionHandlers(
+                count,
+                ReadInt32,
+                ReadInt32);
+        }
 
-		// inline ?
-		void ReadExceptionHandlers (int count, Func<int> read_entry, Func<int> read_length)
-		{
-			for (int i = 0; i < count; i++) {
-				var handler = new ExceptionHandler (
-					(ExceptionHandlerType) (read_entry () & 0x7));
+        // inline ?
+        private void ReadExceptionHandlers(int count, Func<int> read_entry, Func<int> read_length)
+        {
+            for(int i = 0; i < count; i++)
+            {
+                var handler = new ExceptionHandler(
+                    (ExceptionHandlerType)(read_entry() & 0x7));
 
-				handler.TryStart = GetInstruction (read_entry ());
-				handler.TryEnd = GetInstruction (handler.TryStart.Offset + read_length ());
+                handler.TryStart = GetInstruction(read_entry());
+                handler.TryEnd = GetInstruction(handler.TryStart.Offset + read_length());
 
-				handler.HandlerStart = GetInstruction (read_entry ());
-				handler.HandlerEnd = GetInstruction (handler.HandlerStart.Offset + read_length ());
+                handler.HandlerStart = GetInstruction(read_entry());
+                handler.HandlerEnd = GetInstruction(handler.HandlerStart.Offset + read_length());
 
-				ReadExceptionHandlerSpecific (handler);
+                ReadExceptionHandlerSpecific(handler);
 
-				this.body.ExceptionHandlers.Add (handler);
-			}
-		}
+                this.body.ExceptionHandlers.Add(handler);
+            }
+        }
 
-		void ReadExceptionHandlerSpecific (ExceptionHandler handler)
-		{
-			switch (handler.HandlerType) {
-			case ExceptionHandlerType.Catch:
-				handler.CatchType = ReadToken ();
-				break;
-			case ExceptionHandlerType.Filter:
-				handler.FilterStart = GetInstruction (ReadInt32 ());
-				break;
-			default:
-				Advance (4);
-				break;
-			}
-		}
+        private void ReadExceptionHandlerSpecific(ExceptionHandler handler)
+        {
+            switch(handler.HandlerType)
+            {
+            case ExceptionHandlerType.Catch:
+                handler.CatchType = ReadToken();
+                break;
+            case ExceptionHandlerType.Filter:
+                handler.FilterStart = GetInstruction(ReadInt32());
+                break;
+            default:
+                Advance(4);
+                break;
+            }
+        }
 
-		void Align (int align)
-		{
-			align--;
-			Advance (((position + align) & ~align) - position);
-		}
+        private void Align(int align)
+        {
+            align--;
+            Advance(((position + align) & ~align) - position);
+        }
 
-		public MetadataToken ReadToken ()
-		{
-			return new MetadataToken (ReadUInt32 ());
-		}
-	}
+        public MetadataToken ReadToken()
+        {
+            return new MetadataToken(ReadUInt32());
+        }
+
+        private readonly Module module;
+
+        private int start;
+
+        private MethodBody body;
+    }
 }
