@@ -47,23 +47,11 @@ namespace GroboTrace.Mono.Cecil.Cil {
 
 		public Instruction Create (OpCode opcode, byte value)
 		{
-			if (opcode.OperandType == OperandType.ShortInlineVar)
-				return Instruction.Create (opcode, body.Variables [value]);
-
-			if (opcode.OperandType == OperandType.ShortInlineArg)
-				return Instruction.Create (opcode, body.GetParameter (value));
-
 			return Instruction.Create (opcode, value);
 		}
 
 		public Instruction Create (OpCode opcode, int value)
 		{
-			if (opcode.OperandType == OperandType.InlineVar)
-				return Instruction.Create (opcode, body.Variables [value]);
-
-			if (opcode.OperandType == OperandType.InlineArg)
-				return Instruction.Create (opcode, body.GetParameter (value));
-
 			return Instruction.Create (opcode, value);
 		}
 
