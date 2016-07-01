@@ -10,6 +10,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 using GroboTrace.Mono.Cecil.Metadata;
 using GroboTrace.Mono.Cecil.PE;
@@ -21,9 +22,10 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
     internal sealed class CodeWriter : ByteBuffer
     {
-        public CodeWriter(Func<byte[], MetadataToken> signatureTokenBuilder, MethodBody body)
+        public CodeWriter(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, MethodBody body)
             : base(0)
         {
+            this.module = module;
             this.signatureTokenBuilder = signatureTokenBuilder;
             this.body = body;
         }
@@ -263,7 +265,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             stack_sizes[handler_start] = 1;
         }
 
-        private static void ComputeStackSize(Instruction instruction, ref Dictionary<Instruction, int> stack_sizes, ref int stack_size, ref int max_stack)
+        private void ComputeStackSize(Instruction instruction, ref Dictionary<Instruction, int> stack_sizes, ref int stack_size, ref int max_stack)
         {
             int computed_size;
             if(stack_sizes != null && stack_sizes.TryGetValue(instruction, out computed_size))
@@ -323,24 +325,48 @@ namespace GroboTrace.Mono.Cecil.Cil
             }
         }
 
-        private static void ComputeStackDelta(Instruction instruction, ref int stack_size)
+        private void ComputeStackDelta(Instruction instruction, ref int stack_size)
         {
             switch(instruction.opcode.FlowControl)
             {
             case FlowControl.Call:
                 {
-                    var method = (IMethodSignature)instruction.operand;
+                    var token = (MetadataToken)instruction.operand;
+                    bool hasThis;
+                    int parametersCount;
+                    bool hasReturnType;
+                    if(instruction.opcode.Code == Code.Calli)
+                        unsafe
+                        {
+                            var signature = module.ResolveSignature(token.ToInt32());
+                            fixed(byte* z = &signature[0])
+                            {
+                                var parsedSignature = new MethodSignatureReader(z).Read();
+                                hasThis = parsedSignature.HasThis && !parsedSignature.ExplicitThis;
+                                parametersCount = parsedSignature.ParamCount;
+                                hasReturnType = !(parsedSignature.ReturnTypeSignature.Length == 1
+                                                  && parsedSignature.ReturnTypeSignature[0] == (byte)ElementType.Void);
+                            }
+                        }
+                    else
+                    {
+                        var methodBase = module.ResolveMethod(token.ToInt32());
+                        hasThis = methodBase.CallingConvention.HasFlag(CallingConventions.HasThis)
+                            && !methodBase.CallingConvention.HasFlag(CallingConventions.ExplicitThis);
+                        parametersCount = methodBase.GetParameters().Length;
+                        var methodInfo = methodBase as MethodInfo;
+                        hasReturnType = methodInfo != null && methodInfo.ReturnType != typeof(void);
+                    }
                     // pop 'this' argument
-                    if(method.HasImplicitThis() && instruction.opcode.Code != Code.Newobj)
+                    if(hasThis && instruction.opcode.Code != Code.Newobj)
                         stack_size--;
                     // pop normal arguments
-                    if(method.HasParameters)
-                        stack_size -= method.Parameters.Count;
+                    stack_size -= parametersCount;
                     // pop function pointer
                     if(instruction.opcode.Code == Code.Calli)
                         stack_size--;
                     // push return value
-                    if(method.ReturnType.etype != ElementType.Void || instruction.opcode.Code == Code.Newobj)
+                    if (hasReturnType || instruction.opcode.Code == Code.Newobj)
                         stack_size++;
                     break;
                 }
@@ -519,6 +545,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             WriteBytes(((position + align) & ~align) - position);
         }
 
+        private readonly Module module;
         private readonly Func<byte[], MetadataToken> signatureTokenBuilder;
 
         private MethodBody body;

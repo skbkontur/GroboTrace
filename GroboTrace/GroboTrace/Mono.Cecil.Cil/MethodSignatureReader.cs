@@ -6,16 +6,42 @@ using GroboTrace.Mono.Cecil.PE;
 
 namespace GroboTrace.Mono.Cecil.Cil
 {
-    internal sealed unsafe class MethodReturnTypeReader : RawByteBuffer
+    public class ParsedMethodSignature
     {
-        public MethodReturnTypeReader(byte* buffer)
+        public byte CallingConvention;
+        public bool HasThis;
+        public bool ExplicitThis;
+        public byte[] ReturnTypeSignature;
+        public int ParamCount;
+    }
+
+    internal sealed unsafe class MethodSignatureReader : RawByteBuffer
+    {
+        public MethodSignatureReader(byte* buffer)
             : base(buffer)
         {
         }
 
-        public byte[] ReadReturnTypeSignature()
+        public ParsedMethodSignature Read()
         {
             var calling_convention = ReadByte();
+
+            const byte has_this = 0x20;
+            const byte explicit_this = 0x40;
+            bool hasThis = false;
+            bool explicitThis = false;
+
+            if ((calling_convention & has_this) != 0)
+            {
+                hasThis = true;
+                calling_convention = (byte)(calling_convention & ~has_this);
+            }
+
+            if ((calling_convention & explicit_this) != 0)
+            {
+                explicitThis = true;
+                calling_convention = (byte)(calling_convention & ~explicit_this);
+            }
 
             if((calling_convention & 0x10) != 0)
             {
@@ -24,14 +50,21 @@ namespace GroboTrace.Mono.Cecil.Cil
             }
 
             // param_count
-            ReadCompressedUInt32();
+            var param_count = ReadCompressedUInt32();
 
             int start = position;
             ReadTypeSignature();
             int end = position;
-            var result = new byte[end - start];
-            Marshal.Copy((IntPtr)(buffer + start), result, 0, result.Length);
-            return result;
+            var returnTypeSignature = new byte[end - start];
+            Marshal.Copy((IntPtr)(buffer + start), returnTypeSignature, 0, returnTypeSignature.Length);
+            return new ParsedMethodSignature
+                {
+                    CallingConvention = calling_convention,
+                    HasThis = hasThis,
+                    ExplicitThis = explicitThis,
+                    ParamCount = (int)param_count,
+                    ReturnTypeSignature = returnTypeSignature
+                };
         }
 
         private void ReadTypeSignature()

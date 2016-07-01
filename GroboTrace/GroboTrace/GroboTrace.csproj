@@ -79,7 +79,7 @@
     <Compile Include="Mono.Cecil.Cil\ILProcessor.cs" />
     <Compile Include="Mono.Cecil.Cil\Instruction.cs" />
     <Compile Include="Mono.Cecil.Cil\MethodBody.cs" />
-    <Compile Include="Mono.Cecil.Cil\MethodReturnTypeReader.cs" />
+    <Compile Include="Mono.Cecil.Cil\MethodSignatureReader.cs" />
     <Compile Include="Mono.Cecil.Cil\OpCode.cs" />
     <Compile Include="Mono.Cecil.Cil\OpCodes.cs" />
     <Compile Include="Mono.Cecil.Cil\VariableDefinition.cs" />
