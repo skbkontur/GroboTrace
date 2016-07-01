@@ -16,11 +16,8 @@ using GroboTrace.Mono.Collections.Generic;
 
 namespace GroboTrace.Mono.Cecil.Cil {
 
-	public sealed class MethodBody : IVariableDefinitionProvider {
+	public sealed class MethodBody {
 
-		readonly internal MethodDefinition method;
-
-		internal ParameterDefinition this_parameter;
 		internal int max_stack_size;
 		internal int code_size;
 		internal bool init_locals;
@@ -30,11 +27,6 @@ namespace GroboTrace.Mono.Cecil.Cil {
 		internal Collection<ExceptionHandler> exceptions;
 		internal byte[] variablesSignature;
 	    internal uint variablesCount;
-		Scope scope;
-
-		public MethodDefinition Method {
-			get { return method; }
-		}
 
 		public int MaxStackSize {
 			get { return max_stack_size; }
@@ -68,49 +60,15 @@ namespace GroboTrace.Mono.Cecil.Cil {
 		}
 
 		public bool HasVariables {
-			get { return !variables.IsNullOrEmpty (); }
+			get { return variablesCount > 0; }
 		}
 
-		public Collection<VariableDefinition> Variables {
-			get { return variables ?? (variables = new VariableDefinitionCollection ()); }
+        public byte[] VariablesSignature
+        {
+			get { return variablesSignature; }
 		}
 
-		public Scope Scope {
-			get { return scope; }
-			set { scope = value; }
-		}
-
-		public ParameterDefinition ThisParameter {
-			get {
-				if (method == null || method.DeclaringType == null)
-					throw new NotSupportedException ();
-
-				if (!method.HasThis)
-					return null;
-
-				if (this_parameter == null)
-					Interlocked.CompareExchange (ref this_parameter, CreateThisParameter (method), null);
-
-				return this_parameter;
-			}
-		}
-
-		static ParameterDefinition CreateThisParameter (MethodDefinition method)
-		{
-			var declaring_type = method.DeclaringType;
-			var type = declaring_type.IsValueType || declaring_type.IsPrimitive
-				? new ByReferenceType (declaring_type)
-				: declaring_type as TypeReference;
-
-			return new ParameterDefinition (type, method);
-		}
-
-		public MethodBody (MethodDefinition method)
-		{
-			this.method = method;
-		}
-
-		public ILProcessor GetILProcessor ()
+	    public ILProcessor GetILProcessor ()
 		{
 			return new ILProcessor (this);
 		}

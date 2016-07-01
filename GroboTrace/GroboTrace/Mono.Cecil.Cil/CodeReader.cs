@@ -10,6 +10,7 @@
 
 using System;
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 using GroboTrace.Mono.Cecil.Metadata;
 using GroboTrace.Mono.Cecil.PE;
@@ -19,321 +20,187 @@ using RVA = System.UInt32;
 
 namespace GroboTrace.Mono.Cecil.Cil {
 
-    sealed class SignatureReader : ByteBuffer
+    internal sealed unsafe class MethodReturnTypeReader : RawByteBuffer
     {
-        readonly MetadataReader reader;
-        readonly uint start, sig_length;
-
-        TypeSystem TypeSystem
+        public MethodReturnTypeReader(byte* buffer)
+            : base(buffer)
         {
-            get { return reader.module.TypeSystem; }
         }
 
-        public SignatureReader(uint blob, MetadataReader reader)
-            : base(reader.buffer)
-        {
-            this.reader = reader;
-
-            MoveToBlob(blob);
-
-            this.sig_length = ReadCompressedUInt32();
-            this.start = (uint)position;
-        }
-
-        void MoveToBlob(uint blob)
-        {
-            position = (int)(reader.image.BlobHeap.Offset + blob);
-        }
-
-        MetadataToken ReadTypeTokenSignature()
-        {
-            return CodedIndex.TypeDefOrRef.GetMetadataToken(ReadCompressedUInt32());
-        }
-
-        GenericParameter GetGenericParameter(GenericParameterType type, uint var)
-        {
-            var context = reader.context;
-            int index = (int)var;
-
-            if (context == null)
-                return GetUnboundGenericParameter(type, index);
-
-            IGenericParameterProvider provider;
-
-            switch (type)
-            {
-                case GenericParameterType.Type:
-                    provider = context.Type;
-                    break;
-                case GenericParameterType.Method:
-                    provider = context.Method;
-                    break;
-                default:
-                    throw new NotSupportedException();
-            }
-
-            if (!context.IsDefinition)
-                CheckGenericContext(provider, index);
-
-            if (index >= provider.GenericParameters.Count)
-                return GetUnboundGenericParameter(type, index);
-
-            return provider.GenericParameters[index];
-        }
-
-        GenericParameter GetUnboundGenericParameter(GenericParameterType type, int index)
-        {
-            return new GenericParameter(index, type, reader.module);
-        }
-
-        static void CheckGenericContext(IGenericParameterProvider owner, int index)
-        {
-            var owner_parameters = owner.GenericParameters;
-
-            for (int i = owner_parameters.Count; i <= index; i++)
-                owner_parameters.Add(new GenericParameter(owner));
-        }
-
-        public void ReadGenericInstanceSignature(IGenericParameterProvider provider, IGenericInstance instance)
-        {
-            var arity = ReadCompressedUInt32();
-
-            if (!provider.IsDefinition)
-                CheckGenericContext(provider, (int)arity - 1);
-
-            var instance_arguments = instance.GenericArguments;
-
-            for (int i = 0; i < arity; i++)
-                instance_arguments.Add(ReadTypeSignature());
-        }
-
-        ArrayType ReadArrayTypeSignature()
-        {
-            var array = new ArrayType(ReadTypeSignature());
-
-            var rank = ReadCompressedUInt32();
-
-            var sizes = new uint[ReadCompressedUInt32()];
-            for (int i = 0; i < sizes.Length; i++)
-                sizes[i] = ReadCompressedUInt32();
-
-            var low_bounds = new int[ReadCompressedUInt32()];
-            for (int i = 0; i < low_bounds.Length; i++)
-                low_bounds[i] = ReadCompressedInt32();
-
-            array.Dimensions.Clear();
-
-            for (int i = 0; i < rank; i++)
-            {
-                int? lower = null, upper = null;
-
-                if (i < low_bounds.Length)
-                    lower = low_bounds[i];
-
-                if (i < sizes.Length)
-                    upper = lower + (int)sizes[i] - 1;
-
-                array.Dimensions.Add(new ArrayDimension(lower, upper));
-            }
-
-            return array;
-        }
-
-        TypeReference GetTypeDefOrRef(MetadataToken token)
-        {
-            return reader.GetTypeDefOrRef(token);
-        }
-
-        public TypeReference ReadTypeSignature()
-        {
-            return ReadTypeSignature((ElementType)ReadByte());
-        }
-
-        TypeReference ReadTypeSignature(ElementType etype)
-        {
-            switch (etype)
-            {
-                case ElementType.ValueType:
-                    {
-                        var value_type = GetTypeDefOrRef(ReadTypeTokenSignature());
-                        value_type.IsValueType = true;
-                        return value_type;
-                    }
-                case ElementType.Class:
-                    return GetTypeDefOrRef(ReadTypeTokenSignature());
-                case ElementType.Ptr:
-                    return new PointerType(ReadTypeSignature());
-                case ElementType.FnPtr:
-                    {
-                        var fptr = new FunctionPointerType();
-                        ReadMethodSignature(fptr);
-                        return fptr;
-                    }
-                case ElementType.ByRef:
-                    return new ByReferenceType(ReadTypeSignature());
-                case ElementType.Pinned:
-                    return new PinnedType(ReadTypeSignature());
-                case ElementType.SzArray:
-                    return new ArrayType(ReadTypeSignature());
-                case ElementType.Array:
-                    return ReadArrayTypeSignature();
-                case ElementType.CModOpt:
-                    return new OptionalModifierType(
-                        GetTypeDefOrRef(ReadTypeTokenSignature()), ReadTypeSignature());
-                case ElementType.CModReqD:
-                    return new RequiredModifierType(
-                        GetTypeDefOrRef(ReadTypeTokenSignature()), ReadTypeSignature());
-                case ElementType.Sentinel:
-                    return new SentinelType(ReadTypeSignature());
-                case ElementType.Var:
-                    return GetGenericParameter(GenericParameterType.Type, ReadCompressedUInt32());
-                case ElementType.MVar:
-                    return GetGenericParameter(GenericParameterType.Method, ReadCompressedUInt32());
-                case ElementType.GenericInst:
-                    {
-                        var is_value_type = ReadByte() == (byte)ElementType.ValueType;
-                        var element_type = GetTypeDefOrRef(ReadTypeTokenSignature());
-                        var generic_instance = new GenericInstanceType(element_type);
-
-                        ReadGenericInstanceSignature(element_type, generic_instance);
-
-                        if (is_value_type)
-                        {
-                            generic_instance.IsValueType = true;
-                            element_type.GetElementType().IsValueType = true;
-                        }
-
-                        return generic_instance;
-                    }
-                case ElementType.Object: return TypeSystem.Object;
-                case ElementType.Void: return TypeSystem.Void;
-                case ElementType.TypedByRef: return TypeSystem.TypedReference;
-                case ElementType.I: return TypeSystem.IntPtr;
-                case ElementType.U: return TypeSystem.UIntPtr;
-                default: return GetPrimitiveType(etype);
-            }
-        }
-
-        public void ReadMethodSignature(IMethodSignature method)
+        public byte[] ReadReturnTypeSignature()
         {
             var calling_convention = ReadByte();
 
-            const byte has_this = 0x20;
-            const byte explicit_this = 0x40;
-
-            if ((calling_convention & has_this) != 0)
+            if ((calling_convention & 0x10) != 0)
             {
-                method.HasThis = true;
-                calling_convention = (byte)(calling_convention & ~has_this);
+                // arity
+                ReadCompressedUInt32();
             }
 
-            if ((calling_convention & explicit_this) != 0)
-            {
-                method.ExplicitThis = true;
-                calling_convention = (byte)(calling_convention & ~explicit_this);
-            }
+            // param_count
+            ReadCompressedUInt32();
 
-            method.CallingConvention = (MethodCallingConvention)calling_convention;
+            int start = position;
+            ReadTypeSignature();
+            int end = position;
+            var result = new byte[end - start];
+            Marshal.Copy((IntPtr)(buffer + start), result, 0, result.Length);
+            return result;
+        }
 
-            var generic_context = method as MethodReference;
-            if (generic_context != null && !generic_context.DeclaringType.IsArray)
-                reader.context = generic_context;
+        void ReadTypeSignature()
+        {
+            ReadTypeSignature((ElementType)ReadByte());
+        }
+
+        void ReadTypeTokenSignature()
+        {
+            ReadCompressedUInt32();
+        }
+
+        void ReadMethodSignature()
+        {
+            var calling_convention = ReadByte();
 
             if ((calling_convention & 0x10) != 0)
             {
-                var arity = ReadCompressedUInt32();
-
-                if (generic_context != null && !generic_context.IsDefinition)
-                    CheckGenericContext(generic_context, (int)arity - 1);
+                // arity
+                ReadCompressedUInt32();
             }
 
             var param_count = ReadCompressedUInt32();
 
-            method.MethodReturnType.ReturnType = ReadTypeSignature();
+            // return type
+            ReadTypeSignature();
 
             if (param_count == 0)
                 return;
 
-            Collection<ParameterDefinition> parameters;
-
-            var method_ref = method as MethodReference;
-            if (method_ref != null)
-                parameters = method_ref.parameters = new ParameterDefinitionCollection(method, (int)param_count);
-            else
-                parameters = method.Parameters;
-
             for (int i = 0; i < param_count; i++)
-                parameters.Add(new ParameterDefinition(ReadTypeSignature()));
+                ReadTypeSignature();
         }
 
-        TypeReference GetPrimitiveType(ElementType etype)
+
+        void ReadTypeSignature(ElementType etype)
         {
             switch (etype)
             {
-                case ElementType.Boolean:
-                    return TypeSystem.Boolean;
-                case ElementType.Char:
-                    return TypeSystem.Char;
-                case ElementType.I1:
-                    return TypeSystem.SByte;
-                case ElementType.U1:
-                    return TypeSystem.Byte;
-                case ElementType.I2:
-                    return TypeSystem.Int16;
-                case ElementType.U2:
-                    return TypeSystem.UInt16;
-                case ElementType.I4:
-                    return TypeSystem.Int32;
-                case ElementType.U4:
-                    return TypeSystem.UInt32;
-                case ElementType.I8:
-                    return TypeSystem.Int64;
-                case ElementType.U8:
-                    return TypeSystem.UInt64;
-                case ElementType.R4:
-                    return TypeSystem.Single;
-                case ElementType.R8:
-                    return TypeSystem.Double;
-                case ElementType.String:
-                    return TypeSystem.String;
-                default:
-                    throw new NotImplementedException(etype.ToString());
+            case ElementType.ValueType:
+                ReadTypeTokenSignature();
+                break;
+            case ElementType.Class:
+                ReadTypeTokenSignature();
+                break;
+            case ElementType.Ptr:
+                ReadTypeSignature();
+                break;
+            case ElementType.FnPtr:
+                ReadMethodSignature();
+                return;
+            case ElementType.ByRef:
+                ReadTypeSignature();
+                break;
+            case ElementType.Pinned:
+                ReadTypeSignature();
+                break;
+            case ElementType.SzArray:
+                ReadTypeSignature();
+                break;
+            case ElementType.Array:
+                ReadArrayTypeSignature();
+                break;
+            case ElementType.CModOpt:
+                ReadTypeTokenSignature();
+                ReadTypeSignature();
+                break;
+            case ElementType.CModReqD:
+                ReadTypeTokenSignature();
+                ReadTypeSignature();
+                break;
+            case ElementType.Sentinel:
+                ReadTypeSignature();
+                break;
+            case ElementType.Var:
+                ReadCompressedUInt32();
+                break;
+            case ElementType.MVar:
+                ReadCompressedUInt32();
+                break;
+            case ElementType.GenericInst:
+                {
+                    // attrs
+                    ReadByte();
+                    // element_type
+                    ReadTypeTokenSignature();
+
+                    ReadGenericInstanceSignature();
+                    break;
+                }
+            default:
+                ReadBuiltInType();
+                break;
             }
+        }
+
+        void ReadGenericInstanceSignature()
+        {
+            var arity = ReadCompressedUInt32();
+
+            for (int i = 0; i < arity; i++)
+                ReadTypeSignature();
+        }
+
+        void ReadArrayTypeSignature()
+        {
+            // element_type
+            ReadTypeSignature();
+
+            // rank
+            ReadCompressedUInt32();
+
+            var sizes = ReadCompressedUInt32();
+            for (int i = 0; i < sizes; i++)
+                ReadCompressedUInt32();
+
+            var low_bounds = ReadCompressedUInt32();
+            for (int i = 0; i < low_bounds; i++)
+                ReadCompressedInt32();
+        }
+
+        private void ReadBuiltInType()
+        {
+
         }
     }
 
 
-	sealed unsafe class CodeReader : ByteBuffer {
+    sealed unsafe class CodeReader : RawByteBuffer {
 	    private readonly Module module;
-        readonly internal SignatureReader reader;
 
 		int start;
 
-		MethodDefinition method;
 		MethodBody body;
 
 		int Offset {
 			get { return base.position - start; }
 		}
 
-        public CodeReader(byte* data, Module module, SignatureReader reader)
+        public CodeReader(byte* data, Module module)
 			: base (data)
 		{
 		    this.module = module;
-		    this.reader = reader;
 		}
 
-	    public MethodBody ReadMethodBody (MethodDefinition method)
+	    public MethodBody ReadMethodBody ()
 		{
-			this.method = method;
-			this.body = new MethodBody (method);
+			this.body = new MethodBody ();
 
-			ReadMethodBody ();
+			ReadMethodBodyInternal ();
 
 			return this.body;
 		}
 
-	    void ReadMethodBody ()
+	    void ReadMethodBodyInternal ()
 		{
 	        position = 0;
 
@@ -373,7 +240,7 @@ namespace GroboTrace.Mono.Cecil.Cil {
 		public void ReadVariables (MetadataToken local_var_token)
 		{
 		    var signature = module.ResolveSignature(local_var_token.ToInt32());
-		    reader.data = signature;
+		    var reader = new ByteBuffer(signature);
 
             const byte local_sig = 0x7;
 
@@ -394,7 +261,7 @@ namespace GroboTrace.Mono.Cecil.Cil {
 			start = position;
 			var code_size = body.code_size;
 
-			if (code_size < 0 || buffer.Length <= (uint) (code_size + position))
+			if (code_size < 0/* || buffer.Length <= (uint) (code_size + position)*/)
 				code_size = 0;
 
 			var end = start + code_size;
