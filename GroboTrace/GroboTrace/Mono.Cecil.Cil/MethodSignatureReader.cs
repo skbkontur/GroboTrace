@@ -13,11 +13,13 @@ namespace GroboTrace.Mono.Cecil.Cil
         public bool ExplicitThis;
         public byte[] ReturnTypeSignature;
         public int ParamCount;
+
+        public bool HasReturnType => !(ReturnTypeSignature.Length == 1 && ReturnTypeSignature[0] == (byte)ElementType.Void);
     }
 
-    internal sealed unsafe class MethodSignatureReader : RawByteBuffer
+    internal sealed class MethodSignatureReader : ByteBuffer
     {
-        public MethodSignatureReader(byte* buffer)
+        public MethodSignatureReader(byte[] buffer)
             : base(buffer)
         {
         }
@@ -56,7 +58,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             ReadTypeSignature();
             int end = position;
             var returnTypeSignature = new byte[end - start];
-            Marshal.Copy((IntPtr)(buffer + start), returnTypeSignature, 0, returnTypeSignature.Length);
+            Array.Copy(buffer, start, returnTypeSignature, 0, returnTypeSignature.Length);
             return new ParsedMethodSignature
                 {
                     CallingConvention = calling_convention,

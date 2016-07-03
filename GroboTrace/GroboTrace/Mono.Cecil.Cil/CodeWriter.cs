@@ -10,6 +10,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Reflection;
 
 using GroboTrace.Mono.Cecil.Metadata;
@@ -77,8 +78,11 @@ namespace GroboTrace.Mono.Cecil.Cil
             writer.WriteByte(0x7);
             writer.WriteCompressedUInt32(body.variablesCount);
             writer.WriteBytes(body.variablesSignature);
-            var signature = writer.ReadBytes(writer.position);
-            return signatureTokenBuilder(signature);
+            writer.position = 0;
+            var signature = writer.ReadBytes(writer.length);
+            var metadataToken = signatureTokenBuilder(signature);
+            Debug.WriteLine(".NET: got metadata token for signature : {0}", metadataToken.ToInt32());
+            return metadataToken;
         }
 
         private void WriteInstructions()
@@ -336,18 +340,13 @@ namespace GroboTrace.Mono.Cecil.Cil
                     int parametersCount;
                     bool hasReturnType;
                     if(instruction.opcode.Code == Code.Calli)
-                        unsafe
-                        {
-                            var signature = module.ResolveSignature(token.ToInt32());
-                            fixed(byte* z = &signature[0])
-                            {
-                                var parsedSignature = new MethodSignatureReader(z).Read();
-                                hasThis = parsedSignature.HasThis && !parsedSignature.ExplicitThis;
-                                parametersCount = parsedSignature.ParamCount;
-                                hasReturnType = !(parsedSignature.ReturnTypeSignature.Length == 1
-                                                  && parsedSignature.ReturnTypeSignature[0] == (byte)ElementType.Void);
-                            }
-                        }
+                    {
+                        var signature = module.ResolveSignature(token.ToInt32());
+                        var parsedSignature = new MethodSignatureReader(signature).Read();
+                        hasThis = parsedSignature.HasThis && !parsedSignature.ExplicitThis;
+                        parametersCount = parsedSignature.ParamCount;
+                        hasReturnType = parsedSignature.HasReturnType;
+                    }
                     else
                     {
                         var methodBase = module.ResolveMethod(token.ToInt32());

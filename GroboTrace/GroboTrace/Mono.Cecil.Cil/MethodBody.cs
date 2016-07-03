@@ -8,182 +8,116 @@
 // Licensed under the MIT/X11 license.
 //
 
-using System;
-using System.Threading;
-
 using GroboTrace.Mono.Cecil.Metadata;
 using GroboTrace.Mono.Collections.Generic;
 
-namespace GroboTrace.Mono.Cecil.Cil {
+namespace GroboTrace.Mono.Cecil.Cil
+{
+    public sealed class MethodBody
+    {
+        public int MaxStackSize { get { return max_stack_size; } set { max_stack_size = value; } }
 
-	public sealed class MethodBody {
+        public int CodeSize { get { return code_size; } }
 
-		internal int max_stack_size;
-		internal int code_size;
-		internal bool init_locals;
-		internal MetadataToken local_var_token;
+        public bool InitLocals { get { return init_locals; } set { init_locals = value; } }
 
-		internal Collection<Instruction> instructions;
-		internal Collection<ExceptionHandler> exceptions;
-		internal byte[] variablesSignature;
-	    internal uint variablesCount;
+        public MetadataToken LocalVarToken { get { return local_var_token; } set { local_var_token = value; } }
 
-		public int MaxStackSize {
-			get { return max_stack_size; }
-			set { max_stack_size = value; }
-		}
+        public Collection<Instruction> Instructions { get { return instructions ?? (instructions = new InstructionCollection()); } }
 
-		public int CodeSize {
-			get { return code_size; }
-		}
+        public bool HasExceptionHandlers { get { return !exceptions.IsNullOrEmpty(); } }
 
-		public bool InitLocals {
-			get { return init_locals; }
-			set { init_locals = value; }
-		}
+        public Collection<ExceptionHandler> ExceptionHandlers { get { return exceptions ?? (exceptions = new Collection<ExceptionHandler>()); } }
 
-		public MetadataToken LocalVarToken {
-			get { return local_var_token; }
-			set { local_var_token = value; }
-		}
+        public bool HasVariables { get { return variablesCount > 0; } }
 
-		public Collection<Instruction> Instructions {
-			get { return instructions ?? (instructions = new InstructionCollection ()); }
-		}
+        public byte[] VariablesSignature { get { return variablesSignature; } }
 
-		public bool HasExceptionHandlers {
-			get { return !exceptions.IsNullOrEmpty (); }
-		}
-
-		public Collection<ExceptionHandler> ExceptionHandlers {
-			get { return exceptions ?? (exceptions = new Collection<ExceptionHandler> ()); }
-		}
-
-		public bool HasVariables {
-			get { return variablesCount > 0; }
-		}
-
-        public byte[] VariablesSignature
+        public ILProcessor GetILProcessor()
         {
-			get { return variablesSignature; }
-		}
+            return new ILProcessor(this);
+        }
 
-	    public ILProcessor GetILProcessor ()
-		{
-			return new ILProcessor (this);
-		}
-	}
+        internal int max_stack_size;
+        internal int code_size;
+        internal bool init_locals;
+        internal MetadataToken local_var_token;
 
-	public interface IVariableDefinitionProvider {
-		bool HasVariables { get; }
-		Collection<VariableDefinition> Variables { get; }
-	}
+        internal Collection<Instruction> instructions;
+        internal Collection<ExceptionHandler> exceptions;
+        internal byte[] variablesSignature;
+        internal uint variablesCount;
+    }
 
-	class VariableDefinitionCollection : Collection<VariableDefinition> {
+    internal class InstructionCollection : Collection<Instruction>
+    {
+        internal InstructionCollection()
+        {
+        }
 
-		internal VariableDefinitionCollection ()
-		{
-		}
+        internal InstructionCollection(int capacity)
+            : base(capacity)
+        {
+        }
 
-		internal VariableDefinitionCollection (int capacity)
-			: base (capacity)
-		{
-		}
+        protected override void OnAdd(Instruction item, int index)
+        {
+            if(index == 0)
+                return;
 
-		protected override void OnAdd (VariableDefinition item, int index)
-		{
-			item.index = index;
-		}
+            var previous = items[index - 1];
+            previous.next = item;
+            item.previous = previous;
+        }
 
-		protected override void OnInsert (VariableDefinition item, int index)
-		{
-			item.index = index;
+        protected override void OnInsert(Instruction item, int index)
+        {
+            if(size == 0)
+                return;
 
-			for (int i = index; i < size; i++)
-				items [i].index = i + 1;
-		}
+            var current = items[index];
+            if(current == null)
+            {
+                var last = items[index - 1];
+                last.next = item;
+                item.previous = last;
+                return;
+            }
 
-		protected override void OnSet (VariableDefinition item, int index)
-		{
-			item.index = index;
-		}
+            var previous = current.previous;
+            if(previous != null)
+            {
+                previous.next = item;
+                item.previous = previous;
+            }
 
-		protected override void OnRemove (VariableDefinition item, int index)
-		{
-			item.index = -1;
+            current.previous = item;
+            item.next = current;
+        }
 
-			for (int i = index + 1; i < size; i++)
-				items [i].index = i - 1;
-		}
-	}
+        protected override void OnSet(Instruction item, int index)
+        {
+            var current = items[index];
 
-	class InstructionCollection : Collection<Instruction> {
+            item.previous = current.previous;
+            item.next = current.next;
 
-		internal InstructionCollection ()
-		{
-		}
+            current.previous = null;
+            current.next = null;
+        }
 
-		internal InstructionCollection (int capacity)
-			: base (capacity)
-		{
-		}
+        protected override void OnRemove(Instruction item, int index)
+        {
+            var previous = item.previous;
+            if(previous != null)
+                previous.next = item.next;
 
-		protected override void OnAdd (Instruction item, int index)
-		{
-			if (index == 0)
-				return;
+            var next = item.next;
+            if(next != null)
+                next.previous = item.previous;
 
-			var previous = items [index - 1];
-			previous.next = item;
-			item.previous = previous;
-		}
-
-		protected override void OnInsert (Instruction item, int index)
-		{
-			if (size == 0)
-				return;
-
-			var current = items [index];
-			if (current == null) {
-				var last = items [index - 1];
-				last.next = item;
-				item.previous = last;
-				return;
-			}
-
-			var previous = current.previous;
-			if (previous != null) {
-				previous.next = item;
-				item.previous = previous;
-			}
-
-			current.previous = item;
-			item.next = current;
-		}
-
-		protected override void OnSet (Instruction item, int index)
-		{
-			var current = items [index];
-
-			item.previous = current.previous;
-			item.next = current.next;
-
-			current.previous = null;
-			current.next = null;
-		}
-
-		protected override void OnRemove (Instruction item, int index)
-		{
-			var previous = item.previous;
-			if (previous != null)
-				previous.next = item.next;
-
-			var next = item.next;
-			if (next != null)
-				next.previous = item.previous;
-
-			item.previous = null;
-			item.next = null;
-		}
-	}
+            item.previous = null;
+            item.next = null;
+        }
+    }
 }
