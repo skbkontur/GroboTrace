@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 using GrEmit.Utils;
@@ -40,28 +41,28 @@ namespace GroboTrace
         }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate uint SignatureTokenBuilderDelegate(IntPtr corProfiler, ulong moduleId, byte* signature, int len);
+        public delegate uint SignatureTokenBuilderDelegate(UIntPtr moduleId, byte* signature, int len);
 
         [DllExport]
-        // ReSharper disable once UnusedMember.Global
-        public static void Init(IntPtr corProfiler,
-            [MarshalAs(UnmanagedType.FunctionPtr)] SignatureTokenBuilderDelegate signatureTokenBuilderDelegate)
+        public static void Init([MarshalAs(UnmanagedType.FunctionPtr)] SignatureTokenBuilderDelegate signatureTokenBuilderDelegate)
         {
             signatureTokenBuilder = (moduleId, signature) =>
                 {
                     fixed(byte* b = &signature[0])
                     {
-                        var tokenBuilderDelegate = signatureTokenBuilderDelegate(corProfiler, moduleId, b, signature.Length);
+                        var tokenBuilderDelegate = signatureTokenBuilderDelegate(moduleId, b, signature.Length);
                         return new MetadataToken(tokenBuilderDelegate);
                     }
                 };
+
+            RuntimeHelpers.PrepareMethod(typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MethodHandle);
+            RuntimeHelpers.PrepareMethod(typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MethodHandle);
         }
 
         [DllExport]
-        // ReSharper disable once UnusedMember.Global
         public static byte* Trace([MarshalAs(UnmanagedType.LPWStr)] string assemblyName,
                                   [MarshalAs(UnmanagedType.LPWStr)] string moduleName,
-                                  ulong moduleId,
+                                  UIntPtr moduleId,
                                   uint methodToken,
                                   byte* rawMethodBody)
         {
@@ -97,14 +98,14 @@ namespace GroboTrace
             int i, j;
             AddMethod(method, out i, out j);
 
-            var signature = new MethodSignatureReader(module.ResolveSignature((int)methodToken)).Read();
-            Debug.WriteLine(".NET: method has {0} parameters", signature.ParamCount);
+            var methodSignature = new MethodSignatureReader(module.ResolveSignature((int)methodToken)).Read();
+            Debug.WriteLine(".NET: method has {0} parameters", methodSignature.ParamCount);
 
             Debug.WriteLine(".NET: method {0} is asked to be traced", method);
 
             var methodBody = new CodeReader(rawMethodBody, module).ReadMethodBody();
 
-            if(method.Name == "SqrtMod")
+            if(method.Name == "gcd")
             {
                 //var field = typeof(Zzz).GetField("trash", BindingFlags.Static | BindingFlags.Public);
                 //var fieldToken = GetFieldToken(module, field);
@@ -119,12 +120,12 @@ namespace GroboTrace
 
             int resultLocalIndex = -1;
 
-            if(signature.HasReturnType)
+            if(methodSignature.HasReturnType)
             {
                 resultLocalIndex = (int)methodBody.variablesCount;
-                var newSignature = new byte[methodBody.variablesSignature.Length + signature.ReturnTypeSignature.Length];
+                var newSignature = new byte[methodBody.variablesSignature.Length + methodSignature.ReturnTypeSignature.Length];
                 Array.Copy(methodBody.variablesSignature, newSignature, methodBody.variablesSignature.Length);
-                Array.Copy(signature.ReturnTypeSignature, 0, newSignature, methodBody.variablesSignature.Length, signature.ReturnTypeSignature.Length);
+                Array.Copy(methodSignature.ReturnTypeSignature, 0, newSignature, methodBody.variablesSignature.Length, methodSignature.ReturnTypeSignature.Length);
                 methodBody.variablesSignature = newSignature;
                 methodBody.variablesCount++;
             }
@@ -219,7 +220,7 @@ namespace GroboTrace
             return arrayIndex;
         }
 
-        private static Func<ulong, byte[], MetadataToken> signatureTokenBuilder;
+        private static Func<UIntPtr, byte[], MetadataToken> signatureTokenBuilder;
 
         public static readonly MethodBase[][] methods = new MethodBase[32][];
         public static volatile int trash;

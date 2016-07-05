@@ -10,18 +10,16 @@
 
 class CorProfiler : public ICorProfilerCallback5
 {
-private:
+public:
     std::atomic<int> refCount;
     ICorProfilerInfo4* corProfilerInfo;
 
 	char*(*callback)(WCHAR*, WCHAR*, ModuleID, mdToken, char*);
-	void(*init)(void*, void*);
+	void(*init)(void*);
 
 public:
     CorProfiler();
     virtual ~CorProfiler();
-
-	mdToken GetTokenFromSig(ModuleID moduleId, char* sig, int len);
 
     HRESULT STDMETHODCALLTYPE Initialize(IUnknown* pICorProfilerInfoUnk) override;
     HRESULT STDMETHODCALLTYPE Shutdown() override;

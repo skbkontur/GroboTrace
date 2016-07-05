@@ -22,6 +22,9 @@ COR_SIGNATURE enterLeaveMethodSignature             [] = { IMAGE_CEE_CS_CALLCONV
 void(STDMETHODCALLTYPE *EnterMethodAddress)(FunctionID) = &Enter;
 void(STDMETHODCALLTYPE *LeaveMethodAddress)(FunctionID) = &Leave;
 
+//global static singleton
+CorProfiler* corProfiler;
+
 CorProfiler::CorProfiler() : refCount(0), corProfilerInfo(nullptr), callback(nullptr), init(nullptr)
 {
 }
@@ -37,6 +40,8 @@ CorProfiler::~CorProfiler()
 
 HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk)
 {
+	corProfiler = this;
+
     HRESULT queryInterfaceResult = pICorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo4), reinterpret_cast<void **>(&this->corProfilerInfo));
 
     if (FAILED(queryInterfaceResult))
@@ -154,74 +159,57 @@ HRESULT STDMETHODCALLTYPE CorProfiler::FunctionUnloadStarted(FunctionID function
     return S_OK;
 }
 
-mdToken CorProfiler::GetTokenFromSig(ModuleID moduleId, char* sig, int len)
+mdToken GetTokenFromSig(ModuleID moduleId, char* sig, int len)
 {
-	char str[100];
-	sprintf(str, "%I64d", moduleId);
-	OutputDebugStringA(str);
-	if(!this->corProfilerInfo)
-		OutputDebugStringW(L"BUGBUGBUG");
-	CComPtr<IMetaDataImport> metadataImport;
-	if(FAILED(this->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataImport, reinterpret_cast<IUnknown **>(&metadataImport))))
-		OutputDebugStringW(L"Failed to get module metadata");
-	
+	OutputDebugStringW(L"We are in GetTokenFromSig {C++}");
+
 	CComPtr<IMetaDataEmit> metadataEmit;
-	if (FAILED(metadataImport->QueryInterface(IID_IMetaDataEmit, reinterpret_cast<void **>(&metadataEmit))))
-		OutputDebugStringW(L"Failed to get metadata emit");
+	if(FAILED(corProfiler->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataEmit, reinterpret_cast<IUnknown **>(&metadataEmit))))
+		OutputDebugStringW(L"Failed to get metadata emit {C++}");
 	
 	mdSignature token;
-	metadataEmit->GetTokenFromSig((PCCOR_SIGNATURE)sig, len, &token);
+	metadataEmit->GetTokenFromSig(reinterpret_cast<PCCOR_SIGNATURE>(sig), len, &token);
 
-
-	OutputDebugStringW(L"ZZZZZZZZZZZZ");
-//	metadataEmit->Release();
-	//metadataImport->Release();
-	OutputDebugStringW(L"QXXQXXQXXQXX");
+	OutputDebugStringW(L"Success: Token for sig created/found {C++}");
 	return token;
 }
 
-mdToken GetTokenFromSigStatic(CorProfiler* self, ModuleID moduleId, char* sig, int len)
-{
-	return self->GetTokenFromSig(moduleId, sig, len);
-}
 
 HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID functionId, BOOL fIsSafeToBlock)
 {
 	HRESULT hr;
-	mdToken token;
+	mdToken methodDefToken;
+	mdTypeDef typeDefToken;
+	mdModule moduleToken;
 	ClassID classId;
 	ModuleID moduleId;
-
-	IfFailRet(this->corProfilerInfo->GetFunctionInfo(functionId, &classId, &moduleId, &token));
-
+	AssemblyID assemblyId;
+	WCHAR methodNameBuffer[1024];
+	ULONG actualMethodNameSize;
+	WCHAR typeNameBuffer[1024];
+	ULONG actualTypeNameSize;
 	WCHAR moduleNameBuffer[1024];
 	ULONG actualModuleNameSize;
-	AssemblyID assemblyId;
 	WCHAR assemblyNameBuffer[1024];
 	ULONG actualAssemblyNameSize;
 
-	IfFailRet(this->corProfilerInfo->GetModuleInfo(moduleId, nullptr, 1024, &actualModuleNameSize, moduleNameBuffer, &assemblyId));
-	
-	IfFailRet(this->corProfilerInfo->GetAssemblyInfo(assemblyId, 1024, &actualAssemblyNameSize, assemblyNameBuffer, nullptr, nullptr));
+
+	IfFailRet(this->corProfilerInfo->GetFunctionInfo(functionId, &classId, &moduleId, &methodDefToken));
+
+	IfFailRet(this->corProfilerInfo->GetModuleInfo(moduleId, 0, 1024, &actualModuleNameSize, moduleNameBuffer, &assemblyId));
+
+	IfFailRet(this->corProfilerInfo->GetAssemblyInfo(assemblyId, 1024, &actualAssemblyNameSize, assemblyNameBuffer, 0, 0));
 
 	if (!lstrcmpW(assemblyNameBuffer, L"GroboTrace"))
 		return S_OK;
 
 	CComPtr<IMetaDataImport> metadataImport;
-	IfFailRet(this->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataImport, reinterpret_cast<IUnknown **>(&metadataImport)));
-
-	mdTypeDef typeDefToken;
-	WCHAR methodNameBuffer[1024];
-	ULONG actualMethodNameSize;
-	WCHAR typeNameBuffer[1024];
-	ULONG actualTypeNameSize;
-
-	PCCOR_SIGNATURE methodSignature;
-	ULONG signatureSize;
+	if (FAILED(corProfiler->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataImport, reinterpret_cast<IUnknown **>(&metadataImport))))
+		OutputDebugStringW(L"Failed to get IMetadataImport {C++}");
 
 	char str[1024];
 
-	IfFailRet(metadataImport->GetMethodProps(token, &typeDefToken, methodNameBuffer, 1024, &actualMethodNameSize, 0, 0, 0, 0, 0));
+	IfFailRet(metadataImport->GetMethodProps(methodDefToken, &typeDefToken, methodNameBuffer, 1024, &actualMethodNameSize, 0, 0, 0, 0, 0));
 
 	IfFailRet(metadataImport->GetTypeDefProps(typeDefToken, typeNameBuffer, 1024, &actualTypeNameSize, 0, 0));
 
@@ -233,9 +221,9 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	{
 		OutputDebugString(L"Trying to load .NET lib");
 		WCHAR fileName[1024];
-		
+
 		int len = GetModuleFileName(GetModuleHandle(L"ClrProfiler.dll"), fileName, 1024);
-		if(!len)
+		if (!len)
 			OutputDebugString(L"Failed to obtain module file name");
 		for (int i = len - 1; i >= 0; --i)
 			if (fileName[i] == '\\')
@@ -256,10 +244,10 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			OutputDebugString(L"Failed to obtain 'Init' method addr");
 		else
 			OutputDebugString(L"Successfully got 'Init' method addr");
-		init = (void(*)(void*, void*))(procAddr);
+		init = reinterpret_cast<void(*)(void*)>(procAddr);
 
 
-		init((void*)this, (void*)&GetTokenFromSigStatic);
+		init(static_cast<void*>(&GetTokenFromSig));
 		OutputDebugString(L"Successfully called 'Init' method");
 
 		procAddr = GetProcAddress(lib, "Trace");
@@ -267,18 +255,18 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			OutputDebugString(L"Failed to obtain 'Trace' method addr");
 		else
 			OutputDebugString(L"Successfully got 'Trace' method addr");
-		callback = (char*(*)(WCHAR*, WCHAR*, ModuleID, mdToken, char*))(procAddr);
+		callback = reinterpret_cast<char*(*)(WCHAR*, WCHAR*, ModuleID, mdToken, char*)>(procAddr);
 	}
 
 	LPCBYTE methodBody;
 
-	IfFailRet(corProfilerInfo->GetILFunctionBody(moduleId, token, &methodBody, NULL));
+	IfFailRet(corProfilerInfo->GetILFunctionBody(moduleId, methodDefToken, &methodBody, NULL));
 
-	auto rewritten = callback(assemblyNameBuffer, moduleNameBuffer, moduleId, token, (char*)methodBody);
+	auto rewritten = callback(assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody);
 
 	if (rewritten)
 	{
-		IfFailRet(corProfilerInfo->SetILFunctionBody(moduleId, token, (LPCBYTE)rewritten));
+		IfFailRet(corProfilerInfo->SetILFunctionBody(moduleId, methodDefToken, (LPCBYTE)rewritten));
 		OutputDebugStringW(L"Successfully rewrote method");
 	}
 
