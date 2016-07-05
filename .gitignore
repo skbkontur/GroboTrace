@@ -9,3 +9,6 @@ GroboTrace.pdb
 _ReSharper.GroboTrace
 _ReSharper.GroboTrace2010
 GroboTrace/packages/
+Assemblies/ClrProfiler.dll
+*.sdf
+*.opendb

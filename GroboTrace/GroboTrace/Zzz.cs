@@ -40,26 +40,20 @@ namespace GroboTrace
         }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate uint SignatureTokenBuilderDelegate(IntPtr corProfiler, uint moduleId, byte* signature, int len);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate uint FieldReferencerDelegate(IntPtr corProfiler, uint moduleId, [MarshalAs(UnmanagedType.LPWStr)] string typeName, byte* signature, int len);
+        public delegate uint SignatureTokenBuilderDelegate(IntPtr corProfiler, ulong moduleId, byte* signature, int len);
 
         [DllExport]
         // ReSharper disable once UnusedMember.Global
         public static void Init(IntPtr corProfiler,
-            [MarshalAs(UnmanagedType.FunctionPtr)] SignatureTokenBuilderDelegate signatureTokenBuilderDelegate,
-            [MarshalAs(UnmanagedType.FunctionPtr)] FieldReferencerDelegate fieldReferencerDelegate)
+            [MarshalAs(UnmanagedType.FunctionPtr)] SignatureTokenBuilderDelegate signatureTokenBuilderDelegate)
         {
             signatureTokenBuilder = (moduleId, signature) =>
                 {
                     fixed(byte* b = &signature[0])
-                        return new MetadataToken(signatureTokenBuilderDelegate(corProfiler, moduleId, b, signature.Length));
-                };
-            fieldReferencer = (moduleId, typeName, signature) =>
-                {
-                    fixed (byte* b = &signature[0])
-                        return new MetadataToken(fieldReferencerDelegate(corProfiler, moduleId, typeName, b, signature.Length));
+                    {
+                        var tokenBuilderDelegate = signatureTokenBuilderDelegate(corProfiler, moduleId, b, signature.Length);
+                        return new MetadataToken(tokenBuilderDelegate);
+                    }
                 };
         }
 
@@ -67,7 +61,7 @@ namespace GroboTrace
         // ReSharper disable once UnusedMember.Global
         public static byte* Trace([MarshalAs(UnmanagedType.LPWStr)] string assemblyName,
                                   [MarshalAs(UnmanagedType.LPWStr)] string moduleName,
-                                  uint moduleId,
+                                  ulong moduleId,
                                   uint methodToken,
                                   byte* rawMethodBody)
         {
@@ -117,10 +111,10 @@ namespace GroboTrace
                 //Debug.WriteLine(".NET: Field token = {0}", fieldToken.ToInt32());
                 //methodBody.instructions.Insert(0, Instruction.Create(OpCodes.Ldc_I4_1));
                 //methodBody.instructions.Insert(1, Instruction.Create(OpCodes.Stsfld, fieldToken));
-                var m = typeof(Zzz).GetMethod("Trash", BindingFlags.Static | BindingFlags.Public);
-                var fieldToken = GetMethodToken(moduleId, module, m);
-                Debug.WriteLine(".NET: Method token = {0}", fieldToken.ToInt32());
-                methodBody.instructions.Insert(0, Instruction.Create(OpCodes.Call, fieldToken));
+                //var m = typeof(Zzz).GetMethod("Trash", BindingFlags.Static | BindingFlags.Public);
+                //var fieldToken = GetMethodToken(moduleId, module, m);
+                //Debug.WriteLine(".NET: Method token = {0}", fieldToken.ToInt32());
+                //methodBody.instructions.Insert(0, Instruction.Create(OpCodes.Call, fieldToken));
             }
 
             int resultLocalIndex = -1;
@@ -166,34 +160,6 @@ namespace GroboTrace
             var res = Marshal.AllocHGlobal(codeWriter.length);
             Marshal.Copy(codeWriter.buffer, 0, res, codeWriter.length);
             return (byte*)res;
-        }
-
-        public static MetadataToken GetFieldToken(uint moduleId, Module module, FieldInfo field)
-        {
-            // Assuming field is declared in non-generic non-nested type
-            if(field.DeclaringType == null)
-                throw new InvalidOperationException();
-            if(module.Assembly.Equals(field.DeclaringType.Module.Assembly))
-                throw new NotSupportedException();
-            if(field.DeclaringType.DeclaringType != null)
-                throw new NotSupportedException();
-
-            var typeRefToken = fieldReferencer(moduleId, field.DeclaringType.FullName, field.Module.ResolveSignature(field.MetadataToken));
-            return typeRefToken;
-        }
-
-        public static MetadataToken GetMethodToken(uint moduleId, Module module, MethodInfo method)
-        {
-            // Assuming field is declared in non-generic non-nested type
-            if (method.DeclaringType == null)
-                throw new InvalidOperationException();
-            if (module.Assembly.Equals(method.DeclaringType.Module.Assembly))
-                throw new NotSupportedException();
-            if (method.DeclaringType.DeclaringType != null)
-                throw new NotSupportedException();
-
-            var typeRefToken = fieldReferencer(moduleId, method.DeclaringType.FullName, method.Module.ResolveSignature(method.MetadataToken));
-            return typeRefToken;
         }
 
         private static void AddMethod(MethodBase method, out int i, out int j)
@@ -253,8 +219,7 @@ namespace GroboTrace
             return arrayIndex;
         }
 
-        private static Func<uint, byte[], MetadataToken> signatureTokenBuilder;
-        private static Func<uint, string, byte[], MetadataToken> fieldReferencer;
+        private static Func<ulong, byte[], MetadataToken> signatureTokenBuilder;
 
         public static readonly MethodBase[][] methods = new MethodBase[32][];
         public static volatile int trash;
