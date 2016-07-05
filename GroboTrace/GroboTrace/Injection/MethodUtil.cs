@@ -11,10 +11,10 @@ namespace GroboTrace.Injection
     public static class MethodUtil
     {
         [DllImport("kernel32.dll")]
-        private static extern unsafe bool VirtualProtect(IntPtr lpAddress, uint dwSize, MEMORY_PROTECTION_CONSTANTS flNewProtect, MEMORY_PROTECTION_CONSTANTS* lpflOldProtect);
+        public static extern unsafe bool VirtualProtect(IntPtr lpAddress, uint dwSize, MEMORY_PROTECTION_CONSTANTS flNewProtect, MEMORY_PROTECTION_CONSTANTS* lpflOldProtect);
 
         [Flags]
-        private enum MEMORY_PROTECTION_CONSTANTS
+        public enum MEMORY_PROTECTION_CONSTANTS
         {
             PAGE_EXECUTE = 0x10,
             PAGE_EXECUTE_READ = 0x20,

@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 
+using GroboTrace.Injection;
 using GroboTrace.Mono.Cecil.Cil;
 using GroboTrace.Mono.Cecil.Metadata;
 
@@ -62,8 +63,8 @@ namespace GroboTrace
             }
             var bufSize = code.Length + 8;
             ticksReaderAddress = Marshal.AllocHGlobal(bufSize);
-            MEMORY_PROTECTION_CONSTANTS oldProtect;
-            if(!VirtualProtect(ticksReaderAddress, (uint)bufSize, MEMORY_PROTECTION_CONSTANTS.PAGE_EXECUTE_READWRITE, &oldProtect))
+            MethodUtil.MEMORY_PROTECTION_CONSTANTS oldProtect;
+            if(!MethodUtil.VirtualProtect(ticksReaderAddress, (uint)bufSize, MethodUtil.MEMORY_PROTECTION_CONSTANTS.PAGE_EXECUTE_READWRITE, &oldProtect))
                 throw new InvalidOperationException();
             int align = 7;
             ticksReaderAddress = new IntPtr((ticksReaderAddress.ToInt64() + align) & ~align);
@@ -77,26 +78,6 @@ namespace GroboTrace
             }
         }
 
-        [DllImport("kernel32.dll")]
-        private static extern unsafe bool VirtualProtect(IntPtr lpAddress, uint dwSize, MEMORY_PROTECTION_CONSTANTS flNewProtect, MEMORY_PROTECTION_CONSTANTS* lpflOldProtect);
-
-        [Flags]
-        private enum MEMORY_PROTECTION_CONSTANTS
-        {
-            PAGE_EXECUTE = 0x10,
-            PAGE_EXECUTE_READ = 0x20,
-            PAGE_EXECUTE_READWRITE = 0x40,
-            PAGE_EXECUTE_WRITECOPY = 0x80,
-            PAGE_NOACCESS = 0x01,
-            PAGE_READONLY = 0x02,
-            PAGE_READWRITE = 0x04,
-            PAGE_WRITECOPY = 0x08,
-            PAGE_GUARD = 0x100,
-            PAGE_NOCACHE = 0x200,
-            PAGE_WRITECOMBINE = 0x400,
-            PAGE_TARGETS_INVALID = 0x40000000,
-            PAGE_TARGETS_NO_UPDATE = 0x40000000,
-        }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate uint SignatureTokenBuilderDelegate(UIntPtr moduleId, byte* signature, int len);
