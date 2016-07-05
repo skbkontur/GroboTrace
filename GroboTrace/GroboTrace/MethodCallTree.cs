@@ -13,12 +13,12 @@ namespace GroboTrace
             TracingWrapper.TicksReader(out startTicks);
         }
 
-        public void StartMethod(ulong methodHandle, MethodInfo method)
+        public void StartMethod(long methodHandle, MethodBase method)
         {
             current = current.StartMethod(methodHandle, method);
         }
 
-        public void FinishMethod(ulong methodHandle, long elsapsed)
+        public void FinishMethod(long methodHandle, long elsapsed)
         {
             current = current.FinishMethod(methodHandle, elsapsed);
         }
@@ -34,7 +34,7 @@ namespace GroboTrace
         public List<MethodStats> GetStatsAsList(long endTicks)
         {
             var elapsedTicks = endTicks - startTicks;
-            var statsDict = new Dictionary<MethodInfo, MethodStats>();
+            var statsDict = new Dictionary<MethodBase, MethodStats>();
             foreach(var child in root.Children)
                 child.GetStats(statsDict);
             var result = statsDict.Values.Concat(new[] {new MethodStats {Calls = 1, Ticks = elapsedTicks - statsDict.Values.Sum(node => node.Ticks)}}).OrderByDescending(stats => stats.Ticks).ToList();

@@ -6,14 +6,14 @@ namespace GroboTrace
 {
     public static class TracingAnalyzer
     {
-        public static void MethodStarted(MethodInfo method, ulong methodHandle)
+        public static void MethodStarted(MethodBase method, long methodHandle)
         {
             if(tree == null)
                 tree = new MethodCallTree();
             tree.StartMethod(methodHandle, method);
         }
 
-        public static void MethodFinished(MethodInfo method, ulong methodHandle, long elapsed)
+        public static void MethodFinished(long methodHandle, long elapsed)
         {
             tree.FinishMethod(methodHandle, elapsed);
         }

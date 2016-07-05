@@ -7,16 +7,16 @@ namespace GroboTrace
 {
     internal class MethodCallNode
     {
-        public MethodCallNode(MethodCallNode parent, ulong handle, MethodInfo method)
+        public MethodCallNode(MethodCallNode parent, long handle, MethodBase method)
         {
             this.parent = parent;
             this.handle = handle;
             Method = method;
-            handles = new ulong[1];
+            handles = new long[1];
             children = new MethodCallNode[1];
         }
 
-        public MethodCallNode StartMethod(ulong methodHandle, MethodInfo method)
+        public MethodCallNode StartMethod(long methodHandle, MethodBase method)
         {
             var index = methodHandle % (uint)handles.Length;
             if(handles[index] == methodHandle)
@@ -34,7 +34,7 @@ namespace GroboTrace
             return children[index];
         }
 
-        public MethodCallNode FinishMethod(ulong methodHandle, long elapsed)
+        public MethodCallNode FinishMethod(long methodHandle, long elapsed)
         {
             if(methodHandle != handle)
                 throw new InvalidOperationException();
@@ -63,7 +63,7 @@ namespace GroboTrace
                 };
         }
 
-        public void GetStats(Dictionary<MethodInfo, MethodStats> statsDict)
+        public void GetStats(Dictionary<MethodBase, MethodStats> statsDict)
         {
             var selfTicks = Ticks;
             foreach(var child in Children)
@@ -71,7 +71,7 @@ namespace GroboTrace
                 child.GetStats(statsDict);
                 selfTicks -= child.Ticks;
             }
-            var method = Method.IsGenericMethod ? Method.GetGenericMethodDefinition() : Method;
+            var method = Method.IsGenericMethod ? ((MethodInfo)Method).GetGenericMethodDefinition() : Method;
             MethodStats stats;
             if(!statsDict.TryGetValue(method, out stats))
                 statsDict.Add(method, new MethodStats {Calls = Calls, Method = method, Ticks = selfTicks});
@@ -90,15 +90,15 @@ namespace GroboTrace
                 child.ClearStats();
         }
 
-        public MethodInfo Method { get; set; }
+        public MethodBase Method { get; set; }
         public int Calls { get; set; }
         public long Ticks { get; set; }
 
         public IEnumerable<MethodCallNode> Children { get { return children.Where(node => node != null && node.Calls > 0); } }
 
-        private uint Rebuild(ulong newHandle)
+        private uint Rebuild(long newHandle)
         {
-            var values = new List<ulong>();
+            var values = new List<long>();
             for(int i = 0; i < handles.Length; ++i)
             {
                 if(handles[i] != 0)
@@ -123,7 +123,7 @@ namespace GroboTrace
                 }
                 if(ok) break;
             }
-            var newHandles = new ulong[length];
+            var newHandles = new long[length];
             var newChildren = new MethodCallNode[length];
             for(int i = 0; i < handles.Length; ++i)
             {
@@ -139,9 +139,9 @@ namespace GroboTrace
             return (uint)(newHandle % length);
         }
 
-        private readonly ulong handle;
+        private readonly long handle;
         private readonly MethodCallNode parent;
         private MethodCallNode[] children;
-        private ulong[] handles;
+        private long[] handles;
     }
 }

@@ -255,14 +255,14 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			OutputDebugString(L"Failed to obtain 'Trace' method addr");
 		else
 			OutputDebugString(L"Successfully got 'Trace' method addr");
-		callback = reinterpret_cast<char*(*)(WCHAR*, WCHAR*, ModuleID, mdToken, char*)>(procAddr);
+		callback = reinterpret_cast<char*(*)(FunctionID, WCHAR*, WCHAR*, FunctionID, mdToken, char*)>(procAddr);
 	}
 
 	LPCBYTE methodBody;
 
 	IfFailRet(corProfilerInfo->GetILFunctionBody(moduleId, methodDefToken, &methodBody, NULL));
 
-	auto rewritten = callback(assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody);
+	auto rewritten = callback(functionId, assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody);
 
 	if (rewritten)
 	{

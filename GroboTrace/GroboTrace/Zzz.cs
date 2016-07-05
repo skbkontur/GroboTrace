@@ -16,6 +16,13 @@ namespace GroboTrace
 {
     public static unsafe class Zzz
     {
+        public static long TemplateForTicksSignature()
+        {
+            return 0L;
+        }
+        
+
+
         static Zzz()
         {
             sizes = new int[32];
@@ -36,6 +43,10 @@ namespace GroboTrace
             }
 
             EmitTicksReader();
+            getMethodBaseFunctionAddress = typeof(Zzz).GetMethod("getMethodBase", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
+            methodStartedAddress = typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
+            methodFinishedAddress = typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
+
         }
 
         private static void EmitTicksReader()
@@ -99,7 +110,8 @@ namespace GroboTrace
         }
 
         [DllExport]
-        public static byte* Trace([MarshalAs(UnmanagedType.LPWStr)] string assemblyName,
+        public static byte* Trace(UIntPtr functionId,
+                                  [MarshalAs(UnmanagedType.LPWStr)] string assemblyName,
                                   [MarshalAs(UnmanagedType.LPWStr)] string moduleName,
                                   UIntPtr moduleId,
                                   uint methodToken,
@@ -158,16 +170,27 @@ namespace GroboTrace
             }
 
             int resultLocalIndex = -1;
+            int ticksLocalIndex;
+            byte[] newSignature;
 
             if(methodSignature.HasReturnType)
             {
                 resultLocalIndex = (int)methodBody.variablesCount;
-                var newSignature = new byte[methodBody.variablesSignature.Length + methodSignature.ReturnTypeSignature.Length];
+                newSignature = new byte[methodBody.variablesSignature.Length + methodSignature.ReturnTypeSignature.Length];
                 Array.Copy(methodBody.variablesSignature, newSignature, methodBody.variablesSignature.Length);
                 Array.Copy(methodSignature.ReturnTypeSignature, 0, newSignature, methodBody.variablesSignature.Length, methodSignature.ReturnTypeSignature.Length);
                 methodBody.variablesSignature = newSignature;
                 methodBody.variablesCount++;
             }
+
+            ticksLocalIndex = (int)methodBody.variablesCount;
+            newSignature = new byte[methodBody.variablesSignature.Length + 1];
+            Array.Copy(methodBody.variablesSignature, newSignature, methodBody.variablesSignature.Length);
+            newSignature[newSignature.Length - 1] = 0x0a; // ElementType.I8
+            methodBody.variablesSignature = newSignature;
+            methodBody.variablesCount++;
+
+
 
             //ILGenerator ilgen;
             //ilgen.Emit(System.Reflection.Emit.OpCodes.Ldfld, typeof(Zzz).GetField(""));
@@ -190,7 +213,51 @@ namespace GroboTrace
                 }
                 ++index;
             }
-            if(resultLocalIndex >= 0)
+
+            var ticksReaderSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
+            var ticksReaderToken = signatureTokenBuilder(moduleId, ticksReaderSignature);
+
+            var getMethodBaseSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("getMethodBase", BindingFlags.Public | BindingFlags.Static).MetadataToken);
+            var getMethodBaseToken = signatureTokenBuilder(moduleId, getMethodBaseSignature);
+
+            var methodStartedSignature = typeof(TracingAnalyzer).Module.ResolveSignature(typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MetadataToken);
+            var methodStartedToken = signatureTokenBuilder(moduleId, methodStartedSignature);
+
+            var methodFinishedSignature = typeof(TracingAnalyzer).Module.ResolveSignature(typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MetadataToken);
+            var methodFinishedToken = signatureTokenBuilder(moduleId, methodFinishedSignature);
+
+
+
+            int startIndex = 0;
+
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I4, i)); // [ i ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I4, j)); // [ i, j ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)getMethodBaseFunctionAddress : (long)getMethodBaseFunctionAddress)); // [ i, j, funcAddr ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, getMethodBaseToken)); // [ ourMethod ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I8, (long)functionId)); // [ ourMethod, functionId ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodStartedAddress : (long)methodStartedAddress)); // [ ourMethod, functionId, funcAddr ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, methodStartedToken));
+           
+
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress));
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken));
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex));
+
+
+
+
+            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ldc_I8, (long)functionId));  // [ functionId ]
+            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress)); // [ functionId, funcAddr ]
+            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Calli, ticksReaderToken));  // [ functionId, ticks ]
+            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ldloc, ticksLocalIndex));  // [ functionId, ticks, startTicks ]
+            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Sub));  // [ functionId, elapsed ]
+            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodFinishedAddress : (long)methodFinishedAddress)); // [ functionId, elapsed, funcAddr ]
+            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Calli, methodFinishedToken)); // []
+
+            
+
+
+            if (resultLocalIndex >= 0)
                 methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ldloc, resultLocalIndex));
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ret));
 
@@ -264,11 +331,21 @@ namespace GroboTrace
             trash = 1;
         }
 
+
+        public static object getMethodBase(int i, int j)
+        {
+            return methods[i][j];
+        }
+
+
         private static IntPtr ticksReaderAddress;
+        private static IntPtr getMethodBaseFunctionAddress;
+        private static IntPtr methodStartedAddress;
+        private static IntPtr methodFinishedAddress;
 
         private static Func<UIntPtr, byte[], MetadataToken> signatureTokenBuilder;
 
-        public static readonly MethodBase[][] methods = new MethodBase[32][];
+        private static readonly MethodBase[][] methods = new MethodBase[32][];
         public static volatile int trash;
         private static int numberOfMethods;
 

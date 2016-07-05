@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Reflection;
 
 using GroboTrace;
 
@@ -9,6 +10,13 @@ namespace Tests
 {
     public class Test : TestBase
     {
+        [Test]
+        public void Test_zzz()
+        {
+            var sig = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("getMethodBase", BindingFlags.Public | BindingFlags.Static).MetadataToken);
+            Console.WriteLine(sig);
+        }
+
         [Test]
         public void TestImplIsCorrectlyCalled()
         {

@@ -4,7 +4,7 @@ namespace GroboTrace
 {
     public class MethodStats
     {
-        public MethodInfo Method { get; set; }
+        public MethodBase Method { get; set; }
         public double Percent { get; set; }
         public long Ticks { get; set; }
         public int Calls { get; set; }
