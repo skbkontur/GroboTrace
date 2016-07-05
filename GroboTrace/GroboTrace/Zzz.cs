@@ -2,19 +2,14 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using System.Reflection.Emit;
-using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
-
-using GrEmit.Utils;
 
 using GroboTrace.Mono.Cecil.Cil;
 using GroboTrace.Mono.Cecil.Metadata;
 
 using RGiesecke.DllExport;
-
-using OpCodes = GroboTrace.Mono.Cecil.Cil.OpCodes;
 
 namespace GroboTrace
 {
@@ -38,6 +33,69 @@ namespace GroboTrace
                     count += size;
                 }
             }
+
+            EmitTicksReader();
+        }
+
+        private static void EmitTicksReader()
+        {
+            byte[] code;
+            if(IntPtr.Size == 8)
+            {
+                // x64
+                code = new byte[]
+                    {
+                        0x0f, 0x31, // rdtsc
+                        0x48, 0xc1, 0xe2, 0x20, // shl rdx, 32
+                        0x48, 0x09, 0xd0, // or rax, rdx
+                        0xc3, // ret
+                    };
+            }
+            else
+            {
+                // x86
+                code = new byte[]
+                    {
+                        0x0F, 0x31, // rdtsc
+                        0xC3 // ret
+                    };
+            }
+            var bufSize = code.Length + 8;
+            ticksReaderAddress = Marshal.AllocHGlobal(bufSize);
+            MEMORY_PROTECTION_CONSTANTS oldProtect;
+            if(!VirtualProtect(ticksReaderAddress, (uint)bufSize, MEMORY_PROTECTION_CONSTANTS.PAGE_EXECUTE_READWRITE, &oldProtect))
+                throw new InvalidOperationException();
+            int align = 7;
+            ticksReaderAddress = new IntPtr((ticksReaderAddress.ToInt64() + align) & ~align);
+
+            var pointer = (byte*)ticksReaderAddress;
+            fixed(byte* p = &code[0])
+            {
+                var pp = p;
+                for(var i = 0; i < code.Length; ++i)
+                    *pointer++ = *pp++;
+            }
+        }
+
+        [DllImport("kernel32.dll")]
+        private static extern unsafe bool VirtualProtect(IntPtr lpAddress, uint dwSize, MEMORY_PROTECTION_CONSTANTS flNewProtect, MEMORY_PROTECTION_CONSTANTS* lpflOldProtect);
+
+        [Flags]
+        private enum MEMORY_PROTECTION_CONSTANTS
+        {
+            PAGE_EXECUTE = 0x10,
+            PAGE_EXECUTE_READ = 0x20,
+            PAGE_EXECUTE_READWRITE = 0x40,
+            PAGE_EXECUTE_WRITECOPY = 0x80,
+            PAGE_NOACCESS = 0x01,
+            PAGE_READONLY = 0x02,
+            PAGE_READWRITE = 0x04,
+            PAGE_WRITECOPY = 0x08,
+            PAGE_GUARD = 0x100,
+            PAGE_NOCACHE = 0x200,
+            PAGE_WRITECOMBINE = 0x400,
+            PAGE_TARGETS_INVALID = 0x40000000,
+            PAGE_TARGETS_NO_UPDATE = 0x40000000,
         }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -220,16 +278,18 @@ namespace GroboTrace
             return arrayIndex;
         }
 
+        public static void Trash()
+        {
+            trash = 1;
+        }
+
+        private static IntPtr ticksReaderAddress;
+
         private static Func<UIntPtr, byte[], MetadataToken> signatureTokenBuilder;
 
         public static readonly MethodBase[][] methods = new MethodBase[32][];
         public static volatile int trash;
         private static int numberOfMethods;
-
-        public static void Trash()
-        {
-            trash = 1;
-        }
 
         private static readonly int[] sizes;
         private static readonly int[] counts;
