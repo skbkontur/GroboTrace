@@ -159,6 +159,18 @@ HRESULT STDMETHODCALLTYPE CorProfiler::FunctionUnloadStarted(FunctionID function
     return S_OK;
 }
 
+
+
+void* allocateForMethodBody(ModuleID moduleId, ULONG size)
+{
+	IMethodMalloc* pMalloc;
+
+	corProfiler->corProfilerInfo->GetILFunctionBodyAllocator(moduleId, &pMalloc);
+
+	return pMalloc->Alloc(size);
+}
+
+
 mdToken GetTokenFromSig(ModuleID moduleId, char* sig, int len)
 {
 	OutputDebugStringW(L"We are in GetTokenFromSig {C++}");
@@ -244,10 +256,11 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			OutputDebugString(L"Failed to obtain 'Init' method addr");
 		else
 			OutputDebugString(L"Successfully got 'Init' method addr");
-		init = reinterpret_cast<void(*)(void*)>(procAddr);
+		init = reinterpret_cast<void(*)(void*, void*)>(procAddr);
 
+		
 
-		init(static_cast<void*>(&GetTokenFromSig));
+		init(static_cast<void*>(&GetTokenFromSig), static_cast<void*>(&CoTaskMemAlloc));
 		OutputDebugString(L"Successfully called 'Init' method");
 
 		procAddr = GetProcAddress(lib, "Trace");
@@ -255,14 +268,14 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			OutputDebugString(L"Failed to obtain 'Trace' method addr");
 		else
 			OutputDebugString(L"Successfully got 'Trace' method addr");
-		callback = reinterpret_cast<char*(*)(FunctionID, WCHAR*, WCHAR*, FunctionID, mdToken, char*)>(procAddr);
+		callback = reinterpret_cast<char*(*)(FunctionID, WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
 	}
 
 	LPCBYTE methodBody;
 
 	IfFailRet(corProfilerInfo->GetILFunctionBody(moduleId, methodDefToken, &methodBody, NULL));
 
-	auto rewritten = callback(functionId, assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody);
+	auto rewritten = callback(functionId, assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody, static_cast<void*>(&allocateForMethodBody));
 
 	if (rewritten)
 	{

@@ -339,23 +339,13 @@ namespace GroboTrace.Mono.Cecil.Cil
                     bool hasThis;
                     int parametersCount;
                     bool hasReturnType;
-                    if(instruction.opcode.Code == Code.Calli)
-                    {
-                        var signature = module.ResolveSignature(token.ToInt32());
-                        var parsedSignature = new MethodSignatureReader(signature).Read();
-                        hasThis = parsedSignature.HasThis && !parsedSignature.ExplicitThis;
-                        parametersCount = parsedSignature.ParamCount;
-                        hasReturnType = parsedSignature.HasReturnType;
-                    }
-                    else
-                    {
-                        var methodBase = module.ResolveMethod(token.ToInt32());
-                        hasThis = methodBase.CallingConvention.HasFlag(CallingConventions.HasThis)
-                            && !methodBase.CallingConvention.HasFlag(CallingConventions.ExplicitThis);
-                        parametersCount = methodBase.GetParameters().Length;
-                        var methodInfo = methodBase as MethodInfo;
-                        hasReturnType = methodInfo != null && methodInfo.ReturnType != typeof(void);
-                    }
+                    
+                    var signature = module.ResolveSignature(token.ToInt32());
+                    var parsedSignature = new MethodSignatureReader(signature).Read();
+                    hasThis = parsedSignature.HasThis && !parsedSignature.ExplicitThis;
+                    parametersCount = parsedSignature.ParamCount;
+                    hasReturnType = parsedSignature.HasReturnType;
+                   
                     // pop 'this' argument
                     if(hasThis && instruction.opcode.Code != Code.Newobj)
                         stack_size--;

@@ -8,14 +8,23 @@
 #include "corprof.h"
 #include "CComPtr.h"
 
+//class SharpResponse
+//{
+//	LPCBYTE newMethodBody;
+//	[]
+//};
+
+
+
+
 class CorProfiler : public ICorProfilerCallback5
 {
 public:
     std::atomic<int> refCount;
     ICorProfilerInfo4* corProfilerInfo;
 
-	char*(*callback)(FunctionID, WCHAR*, WCHAR*, ModuleID, mdToken, char*);
-	void(*init)(void*);
+	char*(*callback)(FunctionID, WCHAR*, WCHAR*, ModuleID, mdToken, char*, void*);
+	void(*init)(void*, void*);
 
 public:
     CorProfiler();

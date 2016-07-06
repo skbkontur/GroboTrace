@@ -14,8 +14,17 @@ using RGiesecke.DllExport;
 
 namespace GroboTrace
 {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct COR_IL_MAP
+    {
+        public UInt32 oldOffset;
+        public UInt32 newOffset;
+        public bool fAccurate;
+    }
+
     public static unsafe class Zzz
     {
+
         public static long TemplateForTicksSignature()
         {
             return 0L;
@@ -95,18 +104,28 @@ namespace GroboTrace
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate uint SignatureTokenBuilderDelegate(UIntPtr moduleId, byte* signature, int len);
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void* MethodBodyAllocator(UIntPtr moduleId, uint size);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void* MapEntriesAllocator(UIntPtr size);
+
+
         [DllExport]
-        public static void Init([MarshalAs(UnmanagedType.FunctionPtr)] SignatureTokenBuilderDelegate signatureTokenBuilderDelegate)
+        public static void Init([MarshalAs(UnmanagedType.FunctionPtr)] SignatureTokenBuilderDelegate signatureTokenBuilderDelegate,
+                                [MarshalAs(UnmanagedType.FunctionPtr)] MapEntriesAllocator mapEntriesAllocator)
         {
             signatureTokenBuilder = (moduleId, signature) =>
                 {
                     fixed(byte* b = &signature[0])
                     {
-                        var tokenBuilderDelegate = signatureTokenBuilderDelegate(moduleId, b, signature.Length);
-                        return new MetadataToken(tokenBuilderDelegate);
+                        var token = signatureTokenBuilderDelegate(moduleId, b, signature.Length);
+                        return new MetadataToken(token);
                     }
                 };
 
+            allocateForMapEntries = mapEntriesAllocator;
+            
             RuntimeHelpers.PrepareMethod(typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MethodHandle);
             RuntimeHelpers.PrepareMethod(typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MethodHandle);
         }
@@ -117,7 +136,8 @@ namespace GroboTrace
                                   [MarshalAs(UnmanagedType.LPWStr)] string moduleName,
                                   UIntPtr moduleId,
                                   uint methodToken,
-                                  byte* rawMethodBody)
+                                  byte* rawMethodBody,
+                                  [MarshalAs(UnmanagedType.FunctionPtr)] MethodBodyAllocator allocateForMethodBody)
         {
             
             Debug.WriteLine(".NET: assembly = {0}; module = {1}", assemblyName, moduleName);
@@ -326,7 +346,7 @@ namespace GroboTrace
             var codeWriter = new CodeWriter(module, sig => signatureTokenBuilder(moduleId, sig), methodBody);
             codeWriter.WriteMethodBody();
 
-            var res = Marshal.AllocHGlobal(codeWriter.length);
+            var res = (IntPtr)allocateForMethodBody(moduleId, (uint)codeWriter.length);
             Marshal.Copy(codeWriter.buffer, 0, res, codeWriter.length);
             return (byte*)res;
         }
@@ -407,6 +427,7 @@ namespace GroboTrace
         private static IntPtr methodFinishedAddress;
 
         private static Func<UIntPtr, byte[], MetadataToken> signatureTokenBuilder;
+        private static MapEntriesAllocator allocateForMapEntries;
 
         private static readonly MethodBase[][] methods = new MethodBase[32][];
         public static volatile int trash;
