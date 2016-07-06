@@ -31,7 +31,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         public bool HasVariables { get { return variablesCount > 0; } }
 
-        public byte[] VariablesSignature { get { return variablesSignature; } }
+        public byte[] VariablesSignature { get { return variablesSignature ?? (variablesSignature = new byte[0]); } set { variablesSignature = value; } }
 
         public ILProcessor GetILProcessor()
         {
@@ -45,7 +45,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         internal Collection<Instruction> instructions;
         internal Collection<ExceptionHandler> exceptions;
-        internal byte[] variablesSignature;
+        private byte[] variablesSignature;
         internal uint variablesCount;
     }
 

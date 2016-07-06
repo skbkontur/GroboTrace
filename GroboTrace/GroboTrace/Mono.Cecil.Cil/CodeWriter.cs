@@ -73,11 +73,11 @@ namespace GroboTrace.Mono.Cecil.Cil
         {
             if(!body.HasVariables)
                 return MetadataToken.Zero;
-            var writer = new ByteBuffer(body.variablesSignature.Length + 1 + 4);
+            var writer = new ByteBuffer(body.VariablesSignature.Length + 1 + 4);
             writer.position = 0;
             writer.WriteByte(0x7);
             writer.WriteCompressedUInt32(body.variablesCount);
-            writer.WriteBytes(body.variablesSignature);
+            writer.WriteBytes(body.VariablesSignature);
             writer.position = 0;
             var signature = writer.ReadBytes(writer.length);
             var metadataToken = signatureTokenBuilder(signature);

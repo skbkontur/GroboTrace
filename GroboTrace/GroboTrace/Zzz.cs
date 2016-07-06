@@ -119,9 +119,7 @@ namespace GroboTrace
                                   uint methodToken,
                                   byte* rawMethodBody)
         {
-            if(trash != 0)
-                Debug.WriteLine("SETTING FIELD FROM ANOTHER MODULE WORKED!!!");
-
+            
             Debug.WriteLine(".NET: assembly = {0}; module = {1}", assemblyName, moduleName);
             var assembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == assemblyName);
             if(assembly == null)
@@ -158,18 +156,29 @@ namespace GroboTrace
 
             var methodBody = new CodeReader(rawMethodBody, module).ReadMethodBody();
 
-            if(method.Name == "gcd")
+            
+            Debug.WriteLine("");
+            Debug.WriteLine(method.Name + " instructions:");
+
+            foreach (var instruction in methodBody.Instructions)
             {
-                //var field = typeof(Zzz).GetField("trash", BindingFlags.Static | BindingFlags.Public);
-                //var fieldToken = GetFieldToken(module, field);
-                //Debug.WriteLine(".NET: Field token = {0}", fieldToken.ToInt32());
-                //methodBody.instructions.Insert(0, Instruction.Create(OpCodes.Ldc_I4_1));
-                //methodBody.instructions.Insert(1, Instruction.Create(OpCodes.Stsfld, fieldToken));
-                //var m = typeof(Zzz).GetMethod("Trash", BindingFlags.Static | BindingFlags.Public);
-                //var fieldToken = GetMethodToken(moduleId, module, m);
-                //Debug.WriteLine(".NET: Method token = {0}", fieldToken.ToInt32());
-                //methodBody.instructions.Insert(0, Instruction.Create(OpCodes.Call, fieldToken));
+                Debug.WriteLine(instruction);
             }
+
+            Debug.WriteLine("");
+            Debug.WriteLine(method.Name + " exception handlers:");
+
+            foreach (var exceptionHandler in methodBody.ExceptionHandlers)
+            {
+                Debug.WriteLine("{0}", exceptionHandler.HandlerType);
+                Debug.WriteLine("TryStart: {0}, TryEnd: {1} ", exceptionHandler.TryStart, exceptionHandler.TryEnd);
+                Debug.WriteLine("HandlerStart: {0}, HandlerEnd: {1} ", exceptionHandler.HandlerStart, exceptionHandler.HandlerEnd);
+            }
+
+            Debug.WriteLine("");
+
+
+               
 
             int resultLocalIndex = -1;
             int ticksLocalIndex;
@@ -178,18 +187,18 @@ namespace GroboTrace
             if(methodSignature.HasReturnType)
             {
                 resultLocalIndex = (int)methodBody.variablesCount;
-                newSignature = new byte[methodBody.variablesSignature.Length + methodSignature.ReturnTypeSignature.Length];
-                Array.Copy(methodBody.variablesSignature, newSignature, methodBody.variablesSignature.Length);
-                Array.Copy(methodSignature.ReturnTypeSignature, 0, newSignature, methodBody.variablesSignature.Length, methodSignature.ReturnTypeSignature.Length);
-                methodBody.variablesSignature = newSignature;
+                newSignature = new byte[methodBody.VariablesSignature.Length + methodSignature.ReturnTypeSignature.Length];
+                Array.Copy(methodBody.VariablesSignature, newSignature, methodBody.VariablesSignature.Length);
+                Array.Copy(methodSignature.ReturnTypeSignature, 0, newSignature, methodBody.VariablesSignature.Length, methodSignature.ReturnTypeSignature.Length);
+                methodBody.VariablesSignature = newSignature;
                 methodBody.variablesCount++;
             }
 
             ticksLocalIndex = (int)methodBody.variablesCount;
-            newSignature = new byte[methodBody.variablesSignature.Length + 1];
-            Array.Copy(methodBody.variablesSignature, newSignature, methodBody.variablesSignature.Length);
+            newSignature = new byte[methodBody.VariablesSignature.Length + 1];
+            Array.Copy(methodBody.VariablesSignature, newSignature, methodBody.VariablesSignature.Length);
             newSignature[newSignature.Length - 1] = (byte)ElementType.I8;
-            methodBody.variablesSignature = newSignature;
+            methodBody.VariablesSignature = newSignature;
             methodBody.variablesCount++;
 
 
@@ -205,13 +214,20 @@ namespace GroboTrace
                 var instruction = methodBody.instructions[index];
                 if(instruction.opcode == OpCodes.Ret)
                 {
-                    methodBody.instructions.RemoveAt(index);
+                    
                     if(resultLocalIndex >= 0)
                     {
-                        methodBody.instructions.Insert(index, Instruction.Create(OpCodes.Stloc, resultLocalIndex));
+                        methodBody.instructions[index].OpCode = OpCodes.Stloc;
+                        methodBody.instructions[index].Operand = resultLocalIndex;
                         ++index;
+                        methodBody.instructions.Insert(index, Instruction.Create(OpCodes.Br, dummyInstr));
                     }
-                    methodBody.instructions.Insert(index, Instruction.Create(OpCodes.Br, dummyInstr));
+                    else
+                    {
+                        methodBody.instructions[index].OpCode = OpCodes.Br;
+                        methodBody.instructions[index].Operand = dummyInstr;
+                    }
+                    
                 }
                 ++index;
             }
@@ -240,15 +256,17 @@ namespace GroboTrace
             methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodStartedAddress : (long)methodStartedAddress)); // [ ourMethod, functionId, funcAddr ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, methodStartedToken));
            
-
             methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress));
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken));
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex));
 
+            var tryStartInstruction = methodBody.instructions[startIndex];
 
 
-
-            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ldc_I8, (long)functionId));  // [ functionId ]
+            Instruction tryEndInstruction;
+            Instruction finallyStartInstruction;
+           
+            methodBody.instructions.Insert(methodBody.instructions.Count, finallyStartInstruction = tryEndInstruction = Instruction.Create(OpCodes.Ldc_I8, (long)functionId));  // [ functionId ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress)); // [ functionId, funcAddr ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Calli, ticksReaderToken));  // [ functionId, ticks ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ldloc, ticksLocalIndex));  // [ functionId, ticks, startTicks ]
@@ -256,12 +274,57 @@ namespace GroboTrace
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodFinishedAddress : (long)methodFinishedAddress)); // [ functionId, elapsed, funcAddr ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Calli, methodFinishedToken)); // []
 
-            
 
+
+
+            Instruction endFinallyInstruction;
+            methodBody.instructions.Insert(methodBody.instructions.Count, endFinallyInstruction = Instruction.Create(OpCodes.Endfinally));
+
+            Instruction finallyEndInstruction;
 
             if (resultLocalIndex >= 0)
-                methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ldloc, resultLocalIndex));
-            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ret));
+            {
+
+                methodBody.instructions.Insert(methodBody.instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ldloc, resultLocalIndex));
+                methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ret));
+            }
+            else
+            {
+                methodBody.instructions.Insert(methodBody.instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ret));
+            }
+
+            ExceptionHandler newException = new ExceptionHandler(ExceptionHandlerType.Finally);
+            newException.TryStart = tryStartInstruction;
+            newException.TryEnd = tryEndInstruction;
+            newException.HandlerStart = finallyStartInstruction;
+            newException.HandlerEnd = finallyEndInstruction;
+
+            methodBody.instructions.Insert(methodBody.instructions.IndexOf(tryEndInstruction), Instruction.Create(OpCodes.Leave, finallyEndInstruction ));
+            
+            methodBody.ExceptionHandlers.Add(newException);
+
+
+            Debug.WriteLine("");
+            Debug.WriteLine("Changed " + method.Name + " instructions:");
+
+            foreach (var instruction in methodBody.Instructions)
+            {
+                Debug.WriteLine(instruction);
+            }
+
+            Debug.WriteLine("");
+            Debug.WriteLine("Changed " + method.Name + " exception handlers:");
+
+            foreach (var exceptionHandler in methodBody.ExceptionHandlers)
+            {
+                Debug.WriteLine("{0}", exceptionHandler.HandlerType);
+                Debug.WriteLine("TryStart: {0}, TryEnd: {1} ", exceptionHandler.TryStart, exceptionHandler.TryEnd);
+                Debug.WriteLine("HandlerStart: {0}, HandlerEnd: {1} ", exceptionHandler.HandlerStart, exceptionHandler.HandlerEnd);
+            }
+            Debug.WriteLine("");
+            //methodBody.ExceptionHandlers.RemoveAt(methodBody.ExceptionHandlers.Count-1);
+            //methodBody.Instructions.Remove(endFinallyInstruction);
+
 
             var codeWriter = new CodeWriter(module, sig => signatureTokenBuilder(moduleId, sig), methodBody);
             codeWriter.WriteMethodBody();

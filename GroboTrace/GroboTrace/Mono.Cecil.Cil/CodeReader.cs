@@ -89,8 +89,8 @@ namespace GroboTrace.Mono.Cecil.Cil
             if(count == 0)
                 return;
 
-            body.variablesSignature = new byte[signature.Length - reader.position];
-            Array.Copy(signature, reader.position, body.variablesSignature, 0, body.variablesSignature.Length);
+            body.VariablesSignature = new byte[signature.Length - reader.position];
+            Array.Copy(signature, reader.position, body.VariablesSignature, 0, body.VariablesSignature.Length);
         }
 
         private void ReadCode()

@@ -77,7 +77,8 @@ namespace GroboTrace.Mono.Cecil.Cil
         {
             var instruction = new StringBuilder();
 
-            AppendLabel(instruction, this);
+            //AppendLabel(instruction, this);
+            instruction.Append($"{GetHashCode() % 1000000:D6}");
             instruction.Append(':');
             instruction.Append(' ');
             instruction.Append(opcode.Name);
@@ -91,7 +92,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             {
             case OperandType.ShortInlineBrTarget:
             case OperandType.InlineBrTarget:
-                AppendLabel(instruction, (Instruction)operand);
+                instruction.Append(((Instruction)operand)?.ToString());
                 break;
             case OperandType.InlineSwitch:
                 var labels = (Instruction[])operand;
