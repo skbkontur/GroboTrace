@@ -214,20 +214,17 @@ namespace GroboTrace
                 var instruction = methodBody.instructions[index];
                 if(instruction.opcode == OpCodes.Ret)
                 {
+                    // replace Ret with Nop
+                    methodBody.instructions[index].OpCode = OpCodes.Nop;
+                    ++index;
                     
                     if(resultLocalIndex >= 0)
                     {
-                        methodBody.instructions[index].OpCode = OpCodes.Stloc;
-                        methodBody.instructions[index].Operand = resultLocalIndex;
+                        methodBody.instructions.Insert(index, Instruction.Create(OpCodes.Stloc, resultLocalIndex));
                         ++index;
-                        methodBody.instructions.Insert(index, Instruction.Create(OpCodes.Br, dummyInstr));
                     }
-                    else
-                    {
-                        methodBody.instructions[index].OpCode = OpCodes.Br;
-                        methodBody.instructions[index].Operand = dummyInstr;
-                    }
-                    
+                    methodBody.instructions.Insert(index, Instruction.Create(OpCodes.Br, dummyInstr));
+
                 }
                 ++index;
             }
