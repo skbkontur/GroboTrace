@@ -87,6 +87,8 @@ namespace GroboTrace
                 for(var i = 0; i < code.Length; ++i)
                     *pointer++ = *pp++;
             }
+
+            TicksReader = (TicksReaderDelegate)Marshal.GetDelegateForFunctionPointer(ticksReaderAddress, typeof(TicksReaderDelegate));
         }
 
 
@@ -186,7 +188,7 @@ namespace GroboTrace
             ticksLocalIndex = (int)methodBody.variablesCount;
             newSignature = new byte[methodBody.variablesSignature.Length + 1];
             Array.Copy(methodBody.variablesSignature, newSignature, methodBody.variablesSignature.Length);
-            newSignature[newSignature.Length - 1] = 0x0a; // ElementType.I8
+            newSignature[newSignature.Length - 1] = (byte)ElementType.I8;
             methodBody.variablesSignature = newSignature;
             methodBody.variablesCount++;
 
@@ -337,8 +339,9 @@ namespace GroboTrace
             return methods[i][j];
         }
 
-
+        public delegate long TicksReaderDelegate();
         private static IntPtr ticksReaderAddress;
+        public static TicksReaderDelegate TicksReader;
         private static IntPtr getMethodBaseFunctionAddress;
         private static IntPtr methodStartedAddress;
         private static IntPtr methodFinishedAddress;

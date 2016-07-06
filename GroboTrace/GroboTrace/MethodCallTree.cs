@@ -10,7 +10,7 @@ namespace GroboTrace
         {
             root = new MethodCallNode(null, 0, null);
             current = root;
-            TracingWrapper.TicksReader(out startTicks);
+            startTicks = Zzz.TicksReader();
         }
 
         public void StartMethod(long methodHandle, MethodBase method)
@@ -46,7 +46,7 @@ namespace GroboTrace
         public void ClearStats()
         {
             root.ClearStats();
-            TracingWrapper.TicksReader(out startTicks);
+            startTicks = Zzz.TicksReader();
         }
 
         private readonly MethodCallNode root;
