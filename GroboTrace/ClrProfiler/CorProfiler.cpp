@@ -234,26 +234,39 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 		OutputDebugString(L"Trying to load .NET lib");
 		WCHAR fileName[1024];
 
-		int len = GetModuleFileName(GetModuleHandle(L"ClrProfiler.dll"), fileName, 1024);
-		if (!len)
-			OutputDebugString(L"Failed to obtain module file name");
-		for (int i = len - 1; i >= 0; --i)
-			if (fileName[i] == '\\')
-			{
-				int k = wsprintf(&fileName[i + 1], L"GroboTrace.dll");
-				fileName[i + 1 + k] = 0;
-				break;
+		auto groboTrace = GetModuleHandle(L"GroboTrace.dll");
+		if (!groboTrace)
+		{
+			groboTrace = LoadLibrary(L"GroboTrace.dll");
+			if(groboTrace)
+				OutputDebugString(L"Load GroboTrace from victim's directory");
+			else {
+				int len = GetModuleFileName(GetModuleHandle(L"ClrProfiler.dll"), fileName, 1024);
+				for (int i = len - 1; i >= 0; --i)
+					if (fileName[i] == '\\')
+					{
+						int k = wsprintf(&fileName[i + 1], L"GroboTrace.dll");
+						fileName[i + 1 + k] = 0;
+						break;
+					}
+				OutputDebugString(fileName);
+				auto lib = LoadLibrary(fileName);
+				if (!lib)
+					OutputDebugString(L"Failed to load GroboTrace");
+				else
+					OutputDebugString(L"Successfully loaded GroboTrace");
+				groboTrace = lib;
 			}
-		OutputDebugString(fileName);
-		auto lib = LoadLibrary(fileName);
-		if (!lib)
-			OutputDebugString(L"Failed to load GroboTrace");
-		else
-			OutputDebugString(L"Successfully loaded GroboTrace");
+		}
+		else OutputDebugString(L"GroboTrace has already been loaded");
 
-		auto procAddr = GetProcAddress(lib, "Init");
+		auto procAddr = GetProcAddress(groboTrace, "Init");
 		if (!procAddr)
+		{
 			OutputDebugString(L"Failed to obtain 'Init' method addr");
+			wsprintf(fileName, L"%ld", GetLastError());
+			OutputDebugString(fileName);
+		}
 		else
 			OutputDebugString(L"Successfully got 'Init' method addr");
 		init = reinterpret_cast<void(*)(void*, void*)>(procAddr);
@@ -263,7 +276,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 		init(static_cast<void*>(&GetTokenFromSig), static_cast<void*>(&CoTaskMemAlloc));
 		OutputDebugString(L"Successfully called 'Init' method");
 
-		procAddr = GetProcAddress(lib, "Trace");
+		procAddr = GetProcAddress(groboTrace, "Trace");
 		if (!procAddr)
 			OutputDebugString(L"Failed to obtain 'Trace' method addr");
 		else

@@ -26,7 +26,7 @@ namespace GroboTrace
         public MethodStatsNode GetStatsAsTree(long endTicks)
         {
             var elapsedTicks = endTicks - startTicks;
-            var result = root.GetStats(elapsedTicks);
+            var result = current.GetStats(elapsedTicks);
             result.MethodStats.Percent = 100.0;
             return result;
         }
@@ -35,7 +35,7 @@ namespace GroboTrace
         {
             var elapsedTicks = endTicks - startTicks;
             var statsDict = new Dictionary<MethodBase, MethodStats>();
-            foreach(var child in root.Children)
+            foreach(var child in current.Children)
                 child.GetStats(statsDict);
             var result = statsDict.Values.Concat(new[] {new MethodStats {Calls = 1, Ticks = elapsedTicks - statsDict.Values.Sum(node => node.Ticks)}}).OrderByDescending(stats => stats.Ticks).ToList();
             foreach(var stats in result)
