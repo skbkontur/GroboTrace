@@ -77,41 +77,40 @@ namespace GroboTrace.Mono.Cecil.Cil
         {
             var instruction = new StringBuilder();
 
-            //AppendLabel(instruction, this);
-            instruction.Append($"{GetHashCode() % 1000000:D6}");
+            AppendLabel(instruction, this);
             instruction.Append(':');
             instruction.Append(' ');
             instruction.Append(opcode.Name);
 
-            if(operand == null)
+            if (operand == null)
                 return instruction.ToString();
 
             instruction.Append(' ');
 
-            switch(opcode.OperandType)
+            switch (opcode.OperandType)
             {
-            case OperandType.ShortInlineBrTarget:
-            case OperandType.InlineBrTarget:
-                instruction.Append(((Instruction)operand)?.ToString());
-                break;
-            case OperandType.InlineSwitch:
-                var labels = (Instruction[])operand;
-                for(int i = 0; i < labels.Length; i++)
-                {
-                    if(i > 0)
-                        instruction.Append(',');
+                case OperandType.ShortInlineBrTarget:
+                case OperandType.InlineBrTarget:
+                    AppendLabel(instruction, (Instruction)operand);
+                    break;
+                case OperandType.InlineSwitch:
+                    var labels = (Instruction[])operand;
+                    for (int i = 0; i < labels.Length; i++)
+                    {
+                        if (i > 0)
+                            instruction.Append(',');
 
-                    AppendLabel(instruction, labels[i]);
-                }
-                break;
-            case OperandType.InlineString:
-                instruction.Append('\"');
-                instruction.Append(operand);
-                instruction.Append('\"');
-                break;
-            default:
-                instruction.Append(operand);
-                break;
+                        AppendLabel(instruction, labels[i]);
+                    }
+                    break;
+                case OperandType.InlineString:
+                    instruction.Append('\"');
+                    instruction.Append(operand);
+                    instruction.Append('\"');
+                    break;
+                default:
+                    instruction.Append(operand);
+                    break;
             }
 
             return instruction.ToString();
@@ -120,7 +119,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         private static void AppendLabel(StringBuilder builder, Instruction instruction)
         {
             builder.Append("IL_");
-            builder.Append(instruction.offset.ToString("x4"));
+            builder.Append(instruction.offset.ToString("D4"));
         }
 
         public static Instruction Create(OpCode opcode)

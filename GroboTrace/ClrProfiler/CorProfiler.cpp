@@ -268,21 +268,35 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			OutputDebugString(L"Failed to obtain 'Trace' method addr");
 		else
 			OutputDebugString(L"Successfully got 'Trace' method addr");
-		callback = reinterpret_cast<char*(*)(FunctionID, WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
+		callback = reinterpret_cast<SharpResponse(*)(FunctionID, WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
 	}
 
 	LPCBYTE methodBody;
 
 	IfFailRet(corProfilerInfo->GetILFunctionBody(moduleId, methodDefToken, &methodBody, NULL));
 
-	auto rewritten = callback(functionId, assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody, static_cast<void*>(&allocateForMethodBody));
+	SharpResponse sharpResponse = SharpResponse();
+	sharpResponse.newMethodBody = nullptr;
 
-	if (rewritten)
+	sharpResponse = callback(functionId, assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody, static_cast<void*>(&allocateForMethodBody));
+
+	if (sharpResponse.newMethodBody != nullptr)
 	{
-		IfFailRet(corProfilerInfo->SetILFunctionBody(moduleId, methodDefToken, (LPCBYTE)rewritten));
+		OutputDebugStringA("!!! Map entries: ");
+		for (unsigned int i = 0; i < sharpResponse.mapEntriesCount; ++i)
+		{
+			sprintf(str, "Old offset: %u  New offset: %u  fAccurate: %d \r\n", sharpResponse.pMapEntries[i].oldOffset, sharpResponse.pMapEntries[i].newOffset, sharpResponse.pMapEntries[i].fAccurate);
+
+			OutputDebugStringA(str);
+		}
+
+		IfFailRet(corProfilerInfo->SetILInstrumentedCodeMap(functionId, true, sharpResponse.mapEntriesCount, sharpResponse.pMapEntries));
+
+
+		IfFailRet(corProfilerInfo->SetILFunctionBody(moduleId, methodDefToken, sharpResponse.newMethodBody));
 		OutputDebugStringW(L"Successfully rewrote method");
 	}
-
+	
 	return S_OK;
 
 	//mdSignature enterLeaveMethodSignatureToken;

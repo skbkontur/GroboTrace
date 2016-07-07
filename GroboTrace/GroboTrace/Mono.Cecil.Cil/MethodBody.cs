@@ -38,6 +38,8 @@ namespace GroboTrace.Mono.Cecil.Cil
             return new ILProcessor(this);
         }
 
+        
+
         internal int max_stack_size;
         internal int code_size;
         internal bool init_locals;

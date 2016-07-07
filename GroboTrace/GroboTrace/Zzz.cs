@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
@@ -12,15 +14,24 @@ using GroboTrace.Mono.Cecil.Metadata;
 
 using RGiesecke.DllExport;
 
+
 namespace GroboTrace
 {
     [StructLayout(LayoutKind.Sequential)]
     public struct COR_IL_MAP
     {
-        public UInt32 oldOffset;
-        public UInt32 newOffset;
-        public bool fAccurate;
+        public uint oldOffset;
+        public uint newOffset;
+        public int fAccurate; // real type is bool (false = 0, true != 0)
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SharpResponse
+    {
+        public IntPtr newMethodBody;
+        public IntPtr pMapEntries;
+        public uint mapEntriesCount;
+    } 
 
     public static unsafe class Zzz
     {
@@ -30,7 +41,6 @@ namespace GroboTrace
             return 0L;
         }
         
-
 
         static Zzz()
         {
@@ -108,7 +118,7 @@ namespace GroboTrace
         public delegate void* MethodBodyAllocator(UIntPtr moduleId, uint size);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void* MapEntriesAllocator(UIntPtr size);
+        public delegate IntPtr MapEntriesAllocator(UIntPtr size);
 
 
         [DllExport]
@@ -131,7 +141,7 @@ namespace GroboTrace
         }
 
         [DllExport]
-        public static byte* Trace(UIntPtr functionId,
+        public static SharpResponse Trace(UIntPtr functionId,
                                   [MarshalAs(UnmanagedType.LPWStr)] string assemblyName,
                                   [MarshalAs(UnmanagedType.LPWStr)] string moduleName,
                                   UIntPtr moduleId,
@@ -139,20 +149,21 @@ namespace GroboTrace
                                   byte* rawMethodBody,
                                   [MarshalAs(UnmanagedType.FunctionPtr)] MethodBodyAllocator allocateForMethodBody)
         {
+            SharpResponse response = new SharpResponse();
             
             Debug.WriteLine(".NET: assembly = {0}; module = {1}", assemblyName, moduleName);
             var assembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == assemblyName);
             if(assembly == null)
             {
                 Debug.WriteLine(".NET: Unable to obtain assembly with name {0}", assemblyName);
-                return null;
+                return response;
             }
 
             var module = assembly.GetModules().FirstOrDefault(m => m.FullyQualifiedName == moduleName);
             if(module == null)
             {
                 Debug.WriteLine(".NET: Unable to obtain module. Assembly = {0}, module path = {1}", assemblyName, moduleName);
-                return null;
+                return response;
             }
 
             MethodBase method;
@@ -163,7 +174,7 @@ namespace GroboTrace
             catch(Exception)
             {
                 Debug.WriteLine(".NET: Unable to obtain method with token {2}. Assembly = {0}, module path = {1}", assemblyName, moduleName, methodToken);
-                return null;
+                return response;
             }
 
             int i, j;
@@ -196,6 +207,15 @@ namespace GroboTrace
             }
 
             Debug.WriteLine("");
+
+
+            List<Tuple<Instruction, int>> oldOffsets = new List<Tuple<Instruction, int>>();
+
+            foreach (var instruction in methodBody.instructions)
+            {
+                oldOffsets.Add(Tuple.Create(instruction, instruction.Offset));
+            }
+
 
 
                
@@ -321,6 +341,9 @@ namespace GroboTrace
             methodBody.ExceptionHandlers.Add(newException);
 
 
+            var codeWriter = new CodeWriter(module, sig => signatureTokenBuilder(moduleId, sig), methodBody);
+            codeWriter.WriteMethodBody();
+
             Debug.WriteLine("");
             Debug.WriteLine("Changed " + method.Name + " instructions:");
 
@@ -339,16 +362,35 @@ namespace GroboTrace
                 Debug.WriteLine("HandlerStart: {0}, HandlerEnd: {1} ", exceptionHandler.HandlerStart, exceptionHandler.HandlerEnd);
             }
             Debug.WriteLine("");
-            //methodBody.ExceptionHandlers.RemoveAt(methodBody.ExceptionHandlers.Count-1);
-            //methodBody.Instructions.Remove(endFinallyInstruction);
 
 
-            var codeWriter = new CodeWriter(module, sig => signatureTokenBuilder(moduleId, sig), methodBody);
-            codeWriter.WriteMethodBody();
+            var newMethodBody = (IntPtr)allocateForMethodBody(moduleId, (uint)codeWriter.length);
+            Marshal.Copy(codeWriter.buffer, 0, newMethodBody, codeWriter.length);
 
-            var res = (IntPtr)allocateForMethodBody(moduleId, (uint)codeWriter.length);
-            Marshal.Copy(codeWriter.buffer, 0, res, codeWriter.length);
-            return (byte*)res;
+            response.newMethodBody = newMethodBody;
+
+            
+
+            var startMapEntries = allocateForMapEntries((UIntPtr)(oldOffsets.Count * Marshal.SizeOf(typeof(COR_IL_MAP))));
+
+            var pointer = startMapEntries;
+            foreach (var tuple in oldOffsets)
+            {
+                var mapEntry = new COR_IL_MAP
+                    {
+                        fAccurate = 1,
+                        oldOffset = (uint)tuple.Item2,
+                        newOffset = (uint)tuple.Item1.Offset
+                    };
+
+                Marshal.StructureToPtr(mapEntry, pointer, true);
+                pointer += Marshal.SizeOf(typeof(COR_IL_MAP));
+            }
+
+            response.pMapEntries = startMapEntries;
+            response.mapEntriesCount = (uint)oldOffsets.Count;
+            
+            return response;
         }
 
         private static void AddMethod(MethodBase method, out int i, out int j)

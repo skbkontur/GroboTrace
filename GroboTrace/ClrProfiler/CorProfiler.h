@@ -8,12 +8,13 @@
 #include "corprof.h"
 #include "CComPtr.h"
 
-//class SharpResponse
-//{
-//	LPCBYTE newMethodBody;
-//	[]
-//};
 
+struct SharpResponse
+{
+	LPCBYTE newMethodBody;
+	COR_IL_MAP* pMapEntries;
+	ULONG mapEntriesCount;
+};
 
 
 
@@ -23,7 +24,7 @@ public:
     std::atomic<int> refCount;
     ICorProfilerInfo4* corProfilerInfo;
 
-	char*(*callback)(FunctionID, WCHAR*, WCHAR*, ModuleID, mdToken, char*, void*);
+	SharpResponse(*callback)(FunctionID, WCHAR*, WCHAR*, ModuleID, mdToken, char*, void*);
 	void(*init)(void*, void*);
 
 public:
