@@ -8,6 +8,9 @@
 // Licensed under the MIT/X11 license.
 //
 
+using System;
+using System.Text;
+
 using GroboTrace.Mono.Cecil.Metadata;
 using GroboTrace.Mono.Collections.Generic;
 
@@ -38,7 +41,26 @@ namespace GroboTrace.Mono.Cecil.Cil
             return new ILProcessor(this);
         }
 
-        
+        public override string ToString()
+        {
+            var result = new StringBuilder();
+
+            result.AppendLine("Instructions:");
+            foreach (var instruction in Instructions)
+            {
+                result.AppendLine(instruction.ToString());
+            }
+
+            result.AppendLine();
+
+            result.AppendLine("Exception handlers:");
+            foreach (var exceptionHandler in ExceptionHandlers)
+            {
+                result.AppendLine(exceptionHandler.ToString());
+            }
+
+            return result.ToString();
+        }
 
         internal int max_stack_size;
         internal int code_size;

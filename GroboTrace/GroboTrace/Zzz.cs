@@ -188,24 +188,12 @@ namespace GroboTrace
             var methodBody = new CodeReader(rawMethodBody, module).ReadMethodBody();
 
             
+
+
+            
             Debug.WriteLine("");
-            Debug.WriteLine(method.Name + " instructions:");
-
-            foreach (var instruction in methodBody.Instructions)
-            {
-                Debug.WriteLine(instruction);
-            }
-
-            Debug.WriteLine("");
-            Debug.WriteLine(method.Name + " exception handlers:");
-
-            foreach (var exceptionHandler in methodBody.ExceptionHandlers)
-            {
-                Debug.WriteLine("{0}", exceptionHandler.HandlerType);
-                Debug.WriteLine("TryStart: {0}, TryEnd: {1} ", exceptionHandler.TryStart, exceptionHandler.TryEnd);
-                Debug.WriteLine("HandlerStart: {0}, HandlerEnd: {1} ", exceptionHandler.HandlerStart, exceptionHandler.HandlerEnd);
-            }
-
+            Debug.WriteLine(method.Name);
+            Debug.WriteLine(methodBody);
             Debug.WriteLine("");
 
 
@@ -222,6 +210,7 @@ namespace GroboTrace
 
             int resultLocalIndex = -1;
             int ticksLocalIndex;
+            int profilerOverheadLocalIndex;
             byte[] newSignature;
 
             if(methodSignature.HasReturnType)
@@ -241,10 +230,14 @@ namespace GroboTrace
             methodBody.VariablesSignature = newSignature;
             methodBody.variablesCount++;
 
+            profilerOverheadLocalIndex = (int)methodBody.variablesCount;
+            newSignature = new byte[methodBody.VariablesSignature.Length + 1];
+            Array.Copy(methodBody.VariablesSignature, newSignature, methodBody.VariablesSignature.Length);
+            newSignature[newSignature.Length - 1] = (byte)ElementType.I8;
+            methodBody.VariablesSignature = newSignature;
+            methodBody.variablesCount++;
+            
 
-
-            //ILGenerator ilgen;
-            //ilgen.Emit(System.Reflection.Emit.OpCodes.Ldfld, typeof(Zzz).GetField(""));
 
             var dummyInstr = Instruction.Create(OpCodes.Nop);
             methodBody.instructions.Insert(methodBody.instructions.Count, dummyInstr);
@@ -285,18 +278,27 @@ namespace GroboTrace
 
             int startIndex = 0;
 
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress));
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken));
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex));
+            
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I4, i)); // [ i ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I4, j)); // [ i, j ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)getMethodBaseFunctionAddress : (long)getMethodBaseFunctionAddress)); // [ i, j, funcAddr ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, getMethodBaseToken)); // [ ourMethod ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I8, (long)functionId)); // [ ourMethod, functionId ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodStartedAddress : (long)methodStartedAddress)); // [ ourMethod, functionId, funcAddr ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, methodStartedToken));
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, methodStartedToken)); // []
            
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress));
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken));
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex));
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress)); // [ funcAddr ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken)); // [ ticksNow ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Dup)); // [ ticksNow, ticksNow ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldloc, ticksLocalIndex)); // [ ticksNow, ticksNow, oldTicks ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Sub)); // [ ticksNow, profilingOverhead ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, profilerOverheadLocalIndex)); // [ ticksNow ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex)); // []
 
+            
             var tryStartInstruction = methodBody.instructions[startIndex];
 
 
@@ -308,7 +310,8 @@ namespace GroboTrace
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Calli, ticksReaderToken));  // [ functionId, ticks ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ldloc, ticksLocalIndex));  // [ functionId, ticks, startTicks ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Sub));  // [ functionId, elapsed ]
-            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodFinishedAddress : (long)methodFinishedAddress)); // [ functionId, elapsed, funcAddr ]
+            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ldloc, profilerOverheadLocalIndex));  // [ functionId, elapsed, profilerOverhead ]
+            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodFinishedAddress : (long)methodFinishedAddress)); // [ functionId, elapsed, profilerOverhead , funcAddr ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Calli, methodFinishedToken)); // []
 
 
@@ -345,22 +348,8 @@ namespace GroboTrace
             codeWriter.WriteMethodBody();
 
             Debug.WriteLine("");
-            Debug.WriteLine("Changed " + method.Name + " instructions:");
-
-            foreach (var instruction in methodBody.Instructions)
-            {
-                Debug.WriteLine(instruction);
-            }
-
-            Debug.WriteLine("");
-            Debug.WriteLine("Changed " + method.Name + " exception handlers:");
-
-            foreach (var exceptionHandler in methodBody.ExceptionHandlers)
-            {
-                Debug.WriteLine("{0}", exceptionHandler.HandlerType);
-                Debug.WriteLine("TryStart: {0}, TryEnd: {1} ", exceptionHandler.TryStart, exceptionHandler.TryEnd);
-                Debug.WriteLine("HandlerStart: {0}, HandlerEnd: {1} ", exceptionHandler.HandlerStart, exceptionHandler.HandlerEnd);
-            }
+            Debug.WriteLine("Changed " + method.Name);
+            Debug.WriteLine(methodBody);
             Debug.WriteLine("");
 
 

@@ -8,6 +8,9 @@
 // Licensed under the MIT/X11 license.
 //
 
+using System;
+using System.Text;
+
 using GroboTrace.Mono.Cecil.Metadata;
 
 namespace GroboTrace.Mono.Cecil.Cil
@@ -40,5 +43,16 @@ namespace GroboTrace.Mono.Cecil.Cil
         public MetadataToken CatchType { get; set; }
 
         public ExceptionHandlerType HandlerType { get; set; }
+
+        public override string ToString()
+        {
+            var result = new StringBuilder();
+
+            result.AppendLine(HandlerType.ToString());
+            result.AppendLine(String.Format("TryStart: {0}, TryEnd: {1}", TryStart, TryEnd));
+            result.AppendLine(String.Format("HandlerStart: {0}, HandlerEnd: {1}", HandlerStart, HandlerEnd));
+
+            return result.ToString();
+        }
     }
 }

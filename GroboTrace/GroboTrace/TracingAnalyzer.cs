@@ -13,7 +13,7 @@ namespace GroboTrace
             tree.StartMethod(methodHandle, method);
         }
 
-        public static void MethodFinished(long methodHandle, long elapsed)
+        public static void MethodFinished(long methodHandle, long elapsed, long profilerOverhead)
         {
             tree.FinishMethod(methodHandle, elapsed);
         }

@@ -50,8 +50,8 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
     }
 
     DWORD eventMask = COR_PRF_MONITOR_JIT_COMPILATION                      |
-                      COR_PRF_DISABLE_TRANSPARENCY_CHECKS_UNDER_FULL_TRUST | /* helps the case where this profiler is used on Full CLR */
-                      COR_PRF_DISABLE_INLINING                             ;
+                      COR_PRF_DISABLE_TRANSPARENCY_CHECKS_UNDER_FULL_TRUST  /* helps the case where this profiler is used on Full CLR */
+                      /*COR_PRF_DISABLE_INLINING*/                             ;
 
     auto hr = this->corProfilerInfo->SetEventMask(eventMask);
 
@@ -295,13 +295,13 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 
 	if (sharpResponse.newMethodBody != nullptr)
 	{
-		OutputDebugStringA("!!! Map entries: ");
+		/*OutputDebugStringA("!!! Map entries: ");
 		for (unsigned int i = 0; i < sharpResponse.mapEntriesCount; ++i)
 		{
 			sprintf(str, "Old offset: %u  New offset: %u  fAccurate: %d \r\n", sharpResponse.pMapEntries[i].oldOffset, sharpResponse.pMapEntries[i].newOffset, sharpResponse.pMapEntries[i].fAccurate);
 
 			OutputDebugStringA(str);
-		}
+		}*/
 
 		IfFailRet(corProfilerInfo->SetILInstrumentedCodeMap(functionId, true, sharpResponse.mapEntriesCount, sharpResponse.pMapEntries));
 
