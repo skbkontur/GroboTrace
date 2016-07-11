@@ -14,6 +14,7 @@ using GroboTrace.Mono.Cecil.Metadata;
 
 using RGiesecke.DllExport;
 
+using MethodBody = GroboTrace.Mono.Cecil.Cil.MethodBody;
 
 namespace GroboTrace
 {
@@ -44,6 +45,8 @@ namespace GroboTrace
 
         static Zzz()
         {
+            __canon = typeof(object).Assembly.GetTypes().First(x => x.FullName == "System.__Canon");
+
             sizes = new int[32];
             counts = new int[32];
 
@@ -119,7 +122,7 @@ namespace GroboTrace
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate IntPtr MapEntriesAllocator(UIntPtr size);
-
+        
 
         [DllExport]
         public static void Init([MarshalAs(UnmanagedType.FunctionPtr)] SignatureTokenBuilderDelegate signatureTokenBuilderDelegate,
@@ -147,7 +150,9 @@ namespace GroboTrace
                                   UIntPtr moduleId,
                                   uint methodToken,
                                   byte* rawMethodBody,
-                                  [MarshalAs(UnmanagedType.FunctionPtr)] MethodBodyAllocator allocateForMethodBody)
+                                  [MarshalAs(UnmanagedType.FunctionPtr)] MethodBodyAllocator allocateForMethodBody,
+                                  uint typeGenericParameters,
+                                  uint methodGenericParameters)
         {
             SharpResponse response = new SharpResponse();
             
@@ -188,14 +193,28 @@ namespace GroboTrace
             var methodBody = new CodeReader(rawMethodBody, module).ReadMethodBody();
 
             
-
-
             
-            Debug.WriteLine("");
-            Debug.WriteLine(method.Name);
-            Debug.WriteLine(methodBody);
-            Debug.WriteLine("");
+            sendToDebug("Plain", method, methodBody);
 
+            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
+
+            if (methodBody.isTiny)
+            {
+                Debug.WriteLine(method + " is tiny");
+            }
+
+            Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
+
+            if (methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
+            {
+                Debug.WriteLine(method + " too simple to be traced");
+                return response;
+            }
+
+
+
+            //if (method.Name == "Main" || method.Name == "add2" || method.Name == "twice")
+            //    return response;
 
             List<Tuple<Instruction, int>> oldOffsets = new List<Tuple<Instruction, int>>();
 
@@ -344,15 +363,12 @@ namespace GroboTrace
             methodBody.ExceptionHandlers.Add(newException);
 
 
-            var codeWriter = new CodeWriter(module, sig => signatureTokenBuilder(moduleId, sig), methodBody);
+            var codeWriter = new CodeWriter(module, sig => signatureTokenBuilder(moduleId, sig), methodBody, typeGenericParameters, methodGenericParameters);
             codeWriter.WriteMethodBody();
 
-            Debug.WriteLine("");
-            Debug.WriteLine("Changed " + method.Name);
-            Debug.WriteLine(methodBody);
-            Debug.WriteLine("");
-
-
+         
+            sendToDebug("Changed", method, methodBody);
+            
             var newMethodBody = (IntPtr)allocateForMethodBody(moduleId, (uint)codeWriter.length);
             Marshal.Copy(codeWriter.buffer, 0, newMethodBody, codeWriter.length);
 
@@ -439,6 +455,15 @@ namespace GroboTrace
             return arrayIndex;
         }
 
+
+        private static void sendToDebug(String label, MethodBase method, MethodBody methodBody)
+        {
+            Debug.WriteLine("");
+            Debug.WriteLine(label + " " + method.DeclaringType + "." + method.Name);
+            Debug.WriteLine(methodBody);
+            Debug.WriteLine("");
+        }
+
         public static void Trash()
         {
             trash = 1;
@@ -466,5 +491,6 @@ namespace GroboTrace
 
         private static readonly int[] sizes;
         private static readonly int[] counts;
+        public static Type __canon;
     }
 }

@@ -44,6 +44,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             switch(flags & 0x3)
             {
             case 0x2: // tiny
+                body.isTiny = true;
                 body.code_size = flags >> 2;
                 body.MaxStackSize = 8;
                 ReadCode();

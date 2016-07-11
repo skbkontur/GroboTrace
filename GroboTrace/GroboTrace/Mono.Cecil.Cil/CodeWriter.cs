@@ -11,7 +11,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 
 using GroboTrace.Mono.Cecil.Metadata;
 using GroboTrace.Mono.Cecil.PE;
@@ -23,9 +25,11 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
     internal sealed class CodeWriter : ByteBuffer
     {
-        public CodeWriter(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, MethodBody body)
+        public CodeWriter(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, MethodBody body, uint typeGenericParameters, uint methodGenericParameters)
             : base(0)
         {
+            this.typeGenericParameters = typeGenericParameters;
+            this.methodGenericParameters = methodGenericParameters;
             this.module = module;
             this.signatureTokenBuilder = signatureTokenBuilder;
             this.body = body;
@@ -336,19 +340,32 @@ namespace GroboTrace.Mono.Cecil.Cil
             case FlowControl.Call:
                 {
                     var token = (MetadataToken)instruction.operand;
-                    bool hasThis;
-                    int parametersCount;
-                    bool hasReturnType;
+                    bool hasThis = false;
+                    int parametersCount = 0;
+                    bool hasReturnType = false;
                     
-                    var signature = module.ResolveSignature(token.ToInt32());
-                    var parsedSignature = new MethodSignatureReader(signature).Read();
-                    hasThis = parsedSignature.HasThis && !parsedSignature.ExplicitThis;
-                    parametersCount = parsedSignature.ParamCount;
-                    hasReturnType = parsedSignature.HasReturnType;
-                   
+                    if (instruction.opcode.Code == Code.Calli)
+                    {
+                        var signature = module.ResolveSignature(token.ToInt32());
+                        var parsedSignature = new MethodSignatureReader(signature).Read();
+                        hasThis = parsedSignature.HasThis && !parsedSignature.ExplicitThis;
+                        parametersCount = parsedSignature.ParamCount;
+                        hasReturnType = parsedSignature.HasReturnType;
+                    }
+                    else
+                    {
+                        var methodBase = module.ResolveMethod(token.ToInt32(), Enumerable.Repeat(Zzz.__canon, (int)typeGenericParameters).ToArray(), Enumerable.Repeat(Zzz.__canon, (int)methodGenericParameters).ToArray());
+                        hasThis = methodBase.CallingConvention.HasFlag(CallingConventions.HasThis)
+                                  && !methodBase.CallingConvention.HasFlag(CallingConventions.ExplicitThis);
+                        parametersCount = methodBase.GetParameters().Length;
+                        var methodInfo = methodBase as MethodInfo;
+                        hasReturnType = methodInfo != null && methodInfo.ReturnType != typeof(void);
+                    }
+
+
                     // pop 'this' argument
-                    if(hasThis && instruction.opcode.Code != Code.Newobj)
-                        stack_size--;
+                    if (hasThis && instruction.opcode.Code != Code.Newobj)
+                    stack_size--;
                     // pop normal arguments
                     stack_size -= parametersCount;
                     // pop function pointer
@@ -538,5 +555,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         private readonly Func<byte[], MetadataToken> signatureTokenBuilder;
 
         private MethodBody body;
+        private uint typeGenericParameters;
+        private uint methodGenericParameters;
     }
 }

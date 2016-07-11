@@ -67,6 +67,8 @@ namespace GroboTrace.Mono.Cecil.Cil
         internal bool init_locals;
         internal MetadataToken local_var_token;
 
+        public bool isTiny;
+
         internal Collection<Instruction> instructions;
         internal Collection<ExceptionHandler> exceptions;
         private byte[] variablesSignature;
