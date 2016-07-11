@@ -234,6 +234,12 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	if (!lstrcmpW(assemblyNameBuffer, L"GroboTrace"))
 		return S_OK;
 
+	if (!lstrcmpW(assemblyNameBuffer, L"System.Core"))
+		return S_OK;
+
+	if (!lstrcmpW(assemblyNameBuffer, L"mscorlib"))
+		return S_OK;
+
 	CComPtr<IMetaDataImport> metadataImport;
 	if (FAILED(corProfiler->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataImport, reinterpret_cast<IUnknown **>(&metadataImport))))
 		OutputDebugStringW(L"Failed to get IMetadataImport {C++}");

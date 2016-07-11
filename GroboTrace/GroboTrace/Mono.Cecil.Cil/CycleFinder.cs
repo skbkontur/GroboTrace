@@ -12,7 +12,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         {
             color[x] = Colors.Grey;
             
-            if (x.OpCode != OpCodes.Br && x.OpCode != OpCodes.Br_S)
+            if (!stopInstructions.Contains(x.OpCode))
             {
                 var target = x.Next;
 
@@ -78,6 +78,17 @@ namespace GroboTrace.Mono.Cecil.Cil
             Black = 2 // finished
         }
 
+        private OpCode[] stopInstructions = new[]
+            {
+                OpCodes.Br,
+                OpCodes.Br_S,
+                OpCodes.Ret,
+                OpCodes.Throw,
+                OpCodes.Rethrow,
+                OpCodes.Jmp,
+                OpCodes.Leave,
+                OpCodes.Leave_S
+            };
 
         private bool containsCycles;
         private Instruction[] instructions;
