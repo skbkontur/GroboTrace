@@ -54,6 +54,13 @@ namespace GroboTrace.Mono.Cecil.Cil
             // param_count
             var param_count = ReadCompressedUInt32();
 
+            while(buffer[position] == (byte)ElementType.CModOpt
+                  || buffer[position] == (byte)ElementType.CModReqD)
+            {
+                ReadByte();
+                ReadTypeTokenSignature();
+            }
+
             int start = position;
             ReadTypeSignature();
             int end = position;
