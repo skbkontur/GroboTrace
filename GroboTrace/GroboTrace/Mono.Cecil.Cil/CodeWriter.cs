@@ -45,6 +45,8 @@ namespace GroboTrace.Mono.Cecil.Cil
         private void WriteResolvedMethodBody(MethodBody body)
         {
             this.body = body;
+            MethodBodyRocks.OptimizeBranches(body);
+
             ComputeHeader();
             if(RequiresFatHeader())
                 WriteFatHeader();
