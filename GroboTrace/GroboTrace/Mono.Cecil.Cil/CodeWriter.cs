@@ -344,9 +344,9 @@ namespace GroboTrace.Mono.Cecil.Cil
             case FlowControl.Call:
                 {
                     var token = (MetadataToken)instruction.operand;
-                    bool hasThis = false;
-                    int parametersCount = 0;
-                    bool hasReturnType = false;
+                    bool hasThis;
+                    int parametersCount;
+                    bool hasReturnType;
                     
                     if (instruction.opcode.Code == Code.Calli)
                     {
