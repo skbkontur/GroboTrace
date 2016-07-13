@@ -35,6 +35,9 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="GrEmit">
+      <HintPath>..\..\Assemblies\GrEmit.dll</HintPath>
+    </Reference>
     <Reference Include="nunit.framework">
       <HintPath>..\..\Assemblies\nunit.framework.dll</HintPath>
     </Reference>
@@ -56,6 +59,7 @@
     <Compile Include="TestGenericType.cs" />
     <Compile Include="TestILReader.cs" />
     <Compile Include="TestInterface.cs" />
+    <Compile Include="TestMethodBodyConverter.cs" />
     <Compile Include="TestNonPublic.cs" />
   </ItemGroup>
   <ItemGroup>

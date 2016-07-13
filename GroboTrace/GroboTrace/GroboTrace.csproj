@@ -59,6 +59,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DynamicMethodExtender.cs" />
     <Compile Include="Exceptions\InaccessibleInterfaceException.cs" />
     <Compile Include="Exceptions\InaccessibleTypeException.cs" />
     <Compile Include="IClassWrapper.cs" />
@@ -87,6 +88,7 @@
     <Compile Include="Mono.Cecil.Cil\MethodSignatureReader.cs" />
     <Compile Include="Mono.Cecil.Cil\OpCode.cs" />
     <Compile Include="Mono.Cecil.Cil\OpCodes.cs" />
+    <Compile Include="Mono.Cecil.Cil\ReflectionMethodBodyConverter.cs" />
     <Compile Include="Mono.Cecil.Metadata\ElementType.cs" />
     <Compile Include="Mono.Cecil.Metadata\MetadataToken.cs" />
     <Compile Include="Mono.Cecil.Metadata\TokenType.cs" />
