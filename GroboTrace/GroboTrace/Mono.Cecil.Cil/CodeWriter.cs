@@ -25,14 +25,13 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
     internal sealed class CodeWriter : ByteBuffer
     {
-        public CodeWriter(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, MethodBody body, uint typeGenericParameters, uint methodGenericParameters)
+        public CodeWriter(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, MethodBody body, int? maxStack)
             : base(0)
         {
-            this.typeGenericParameters = typeGenericParameters;
-            this.methodGenericParameters = methodGenericParameters;
             this.module = module;
             this.signatureTokenBuilder = signatureTokenBuilder;
             this.body = body;
+            this.maxStack = maxStack;
         }
 
         public void WriteMethodBody()
@@ -238,11 +237,12 @@ namespace GroboTrace.Mono.Cecil.Cil
                 instruction.offset = offset;
                 offset += instruction.GetSize();
 
-                ComputeStackSize(instruction, ref stack_sizes, ref stack_size, ref max_stack);
+                if(maxStack == null)
+                    ComputeStackSize(instruction, ref stack_sizes, ref stack_size, ref max_stack);
             }
 
             body.code_size = offset;
-            body.max_stack_size = max_stack;
+            body.max_stack_size = maxStack ?? max_stack;
         }
 
         private void ComputeExceptionHandlerStackSize(ref Dictionary<Instruction, int> stack_sizes)
@@ -358,7 +358,8 @@ namespace GroboTrace.Mono.Cecil.Cil
                     }
                     else
                     {
-                        var methodBase = module.ResolveMethod(token.ToInt32(), Enumerable.Repeat(Zzz.__canon, (int)typeGenericParameters).ToArray(), Enumerable.Repeat(Zzz.__canon, (int)methodGenericParameters).ToArray());
+                        // todo generic methods
+                        var methodBase = module.ResolveMethod(token.ToInt32());
                         hasThis = methodBase.CallingConvention.HasFlag(CallingConventions.HasThis)
                                   && !methodBase.CallingConvention.HasFlag(CallingConventions.ExplicitThis);
                         parametersCount = methodBase.GetParameters().Length;
@@ -559,7 +560,6 @@ namespace GroboTrace.Mono.Cecil.Cil
         private readonly Func<byte[], MetadataToken> signatureTokenBuilder;
 
         private MethodBody body;
-        private uint typeGenericParameters;
-        private uint methodGenericParameters;
+        private readonly int? maxStack;
     }
 }

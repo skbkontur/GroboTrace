@@ -45,12 +45,12 @@ namespace GroboTrace
 
         public void ClearStats()
         {
-            root.ClearStats();
+            current.ClearStats();
             startTicks = Zzz.TicksReader();
         }
 
         private readonly MethodCallNode root;
         private MethodCallNode current;
-        private long startTicks;
+        internal long startTicks;
     }
 }

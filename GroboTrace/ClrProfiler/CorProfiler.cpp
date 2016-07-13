@@ -49,9 +49,9 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
         return E_FAIL;
     }
 
-    DWORD eventMask = COR_PRF_MONITOR_JIT_COMPILATION |                      
-                      COR_PRF_DISABLE_TRANSPARENCY_CHECKS_UNDER_FULL_TRUST /* helps the case where this profiler is used on Full CLR */
-                      /*COR_PRF_DISABLE_INLINING*/                             ;
+    DWORD eventMask = COR_PRF_MONITOR_JIT_COMPILATION
+		              | COR_PRF_DISABLE_TRANSPARENCY_CHECKS_UNDER_FULL_TRUST /* helps the case where this profiler is used on Full CLR */
+                      /*| COR_PRF_DISABLE_INLINING*/                             ;
 
     auto hr = this->corProfilerInfo->SetEventMask(eventMask);
 
@@ -204,16 +204,17 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	ULONG actualModuleNameSize;
 	WCHAR assemblyNameBuffer[1024];
 	ULONG actualAssemblyNameSize;
-	ULONG32 typeGenericParameters = 0;
-	ULONG32 methodGenericParameters = 0;
-	//ClassID methodParametersArray[1024];
-	//ClassID typeParametersArray[1024];
 	char str[1024];
 
+	sprintf(str, "JIT Compilation of the method %I64d", functionId);
 
-	//OutputDebugStringW(L"We are still alive");
+	OutputDebugStringA(str);
 
-	IfFailRet(this->corProfilerInfo->GetFunctionInfo2(functionId, 0, 0, 0, 0, 0, &methodGenericParameters, 0));
+	/*if (FAILED(this->corProfilerInfo->GetFunctionInfo2(functionId, 0, 0, 0, 0, 0, &methodGenericParameters, 0)))
+	{
+		OutputDebugStringW(L"GetFunctionInfo2 failed");
+		return S_OK;
+	}*/
 
 	//sprintf(str, "MethodGenericParameters %d\r\n", methodGenericParameters);
 
@@ -221,15 +222,48 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 
 	//OutputDebugStringW(L"We are dead");
 
-	IfFailRet(this->corProfilerInfo->GetFunctionInfo(functionId, &classId, &moduleId, &methodDefToken));
+	if (FAILED(this->corProfilerInfo->GetFunctionInfo(functionId, &classId, &moduleId, &methodDefToken)))
+	{
+		OutputDebugStringW(L"GetFunctionInfo failed");
+		return S_OK;
+	}
 
-	
 
-	IfFailRet(this->corProfilerInfo->GetClassIDInfo2(classId, 0, 0, 0, 0, &typeGenericParameters, 0));
+	if (FAILED(this->corProfilerInfo->GetModuleInfo(moduleId, 0, 1024, &actualModuleNameSize, moduleNameBuffer, &assemblyId)))
+	{
+		OutputDebugStringW(L"GetModuleInfo failed");
+		return S_OK;
+	}
 
-	IfFailRet(this->corProfilerInfo->GetModuleInfo(moduleId, 0, 1024, &actualModuleNameSize, moduleNameBuffer, &assemblyId));
+	if (FAILED(this->corProfilerInfo->GetAssemblyInfo(assemblyId, 1024, &actualAssemblyNameSize, assemblyNameBuffer, 0, 0)))
+	{
+		OutputDebugStringW(L"GetAssemblyInfo failed");
+		return S_OK;
+	}
 
-	IfFailRet(this->corProfilerInfo->GetAssemblyInfo(assemblyId, 1024, &actualAssemblyNameSize, assemblyNameBuffer, 0, 0));
+	CComPtr<IMetaDataImport> metadataImport;
+	if (FAILED(corProfiler->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataImport, reinterpret_cast<IUnknown **>(&metadataImport))))
+	{
+		OutputDebugStringW(L"Failed to get IMetadataImport {C++}");
+		return S_OK;
+	}
+
+	if (FAILED(metadataImport->GetMethodProps(methodDefToken, &typeDefToken, methodNameBuffer, 1024, &actualMethodNameSize, 0, 0, 0, 0, 0)))
+	{
+		OutputDebugStringW(L"GetMethodProps failed");
+		return S_OK;
+	}
+
+	if (FAILED(metadataImport->GetTypeDefProps(typeDefToken, typeNameBuffer, 1024, &actualTypeNameSize, 0, 0)))
+	{
+		OutputDebugStringW(L"GetTypeDefProps failed");
+		return S_OK;
+	}
+
+	sprintf(str, "JIT Compilation of the method %I64d %ls.%ls\r\n", functionId, typeNameBuffer, methodNameBuffer);
+
+	OutputDebugStringA(str);
+
 
 	if (!lstrcmpW(assemblyNameBuffer, L"GroboTrace"))
 		return S_OK;
@@ -240,19 +274,6 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	if (!lstrcmpW(assemblyNameBuffer, L"mscorlib"))
 		return S_OK;
 
-	CComPtr<IMetaDataImport> metadataImport;
-	if (FAILED(corProfiler->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataImport, reinterpret_cast<IUnknown **>(&metadataImport))))
-		OutputDebugStringW(L"Failed to get IMetadataImport {C++}");
-
-	
-
-	IfFailRet(metadataImport->GetMethodProps(methodDefToken, &typeDefToken, methodNameBuffer, 1024, &actualMethodNameSize, 0, 0, 0, 0, 0));
-
-	IfFailRet(metadataImport->GetTypeDefProps(typeDefToken, typeNameBuffer, 1024, &actualTypeNameSize, 0, 0));
-
-	sprintf(str, "JIT Compilation of the method %ls.%ls\r\n", typeNameBuffer, methodNameBuffer);
-
-	OutputDebugStringA(str);
 
 	/*if (!lstrcmpW(methodNameBuffer, L"Main")) {
 		OutputDebugStringW(L"Main skipped");
@@ -320,7 +341,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			OutputDebugString(L"Failed to obtain 'Trace' method addr");
 		else
 			OutputDebugString(L"Successfully got 'Trace' method addr");
-		callback = reinterpret_cast<SharpResponse(*)(FunctionID, WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*, ULONG32, ULONG32)>(procAddr);
+		callback = reinterpret_cast<SharpResponse(*)(FunctionID, WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
 	}
 
 	LPCBYTE methodBody;
@@ -330,7 +351,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	SharpResponse sharpResponse = SharpResponse();
 	sharpResponse.newMethodBody = nullptr;
 
-	sharpResponse = callback(functionId, assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody, static_cast<void*>(&allocateForMethodBody), typeGenericParameters, methodGenericParameters);
+	sharpResponse = callback(functionId, assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody, static_cast<void*>(&allocateForMethodBody));
 
 	if (sharpResponse.newMethodBody != nullptr)
 	{

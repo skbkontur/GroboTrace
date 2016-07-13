@@ -24,7 +24,7 @@ public:
     std::atomic<int> refCount;
     ICorProfilerInfo4* corProfilerInfo;
 
-	SharpResponse(*callback)(FunctionID, WCHAR*, WCHAR*, ModuleID, mdToken, char*, void*, ULONG32, ULONG32);
+	SharpResponse(*callback)(FunctionID, WCHAR*, WCHAR*, ModuleID, mdToken, char*, void*);
 	void(*init)(void*, void*);
 
 public:

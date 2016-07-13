@@ -23,6 +23,7 @@ namespace GroboTrace
             var ticks = Zzz.TicksReader();
             return new Stats
                 {
+                    ElapsedTicks = tree == null ? 0 : ticks - tree.startTicks,
                     Tree = tree == null ? new MethodStatsNode() : tree.GetStatsAsTree(ticks),
                     List = tree == null ? new List<MethodStats>() : tree.GetStatsAsList(ticks)
                 };

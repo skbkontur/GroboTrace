@@ -105,7 +105,6 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>copy $(TargetDir)$(TargetName).dll $(SolutionDir)..\Assemblies\
-copy $(TargetDir)$(TargetName).pdb $(SolutionDir)..\Assemblies\
 </PostBuildEvent>
   </PropertyGroup>
   <Import Project="../packages/UnmanagedExports.1.2.7/tools/RGiesecke.DllExport.targets" Condition="Exists('../packages/UnmanagedExports.1.2.7/tools/RGiesecke.DllExport.targets')" />

@@ -150,9 +150,7 @@ namespace GroboTrace
                                   UIntPtr moduleId,
                                   uint methodToken,
                                   byte* rawMethodBody,
-                                  [MarshalAs(UnmanagedType.FunctionPtr)] MethodBodyAllocator allocateForMethodBody,
-                                  uint typeGenericParameters,
-                                  uint methodGenericParameters)
+                                  [MarshalAs(UnmanagedType.FunctionPtr)] MethodBodyAllocator allocateForMethodBody)
         {
             SharpResponse response = new SharpResponse();
             
@@ -185,7 +183,10 @@ namespace GroboTrace
             int i, j;
             AddMethod(method, out i, out j);
 
-            var methodSignature = new MethodSignatureReader(module.ResolveSignature((int)methodToken)).Read();
+            var rawSignature = module.ResolveSignature((int)methodToken);
+            var methodSignature = new MethodSignatureReader(rawSignature).Read();
+
+            Debug.WriteLine(".NET: method's signature is: " + Convert.ToBase64String(rawSignature));
             Debug.WriteLine(".NET: method has {0} parameters", methodSignature.ParamCount);
 
             Debug.WriteLine(".NET: method {0} is asked to be traced", method);
@@ -205,11 +206,11 @@ namespace GroboTrace
 
             Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
-            if (methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
-            {
-                Debug.WriteLine(method + " too simple to be traced");
-                return response;
-            }
+//            if (methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
+//            {
+//                Debug.WriteLine(method + " too simple to be traced");
+//                return response;
+//            }
 
 
 
@@ -363,7 +364,7 @@ namespace GroboTrace
             methodBody.ExceptionHandlers.Add(newException);
 
 
-            var codeWriter = new CodeWriter(module, sig => signatureTokenBuilder(moduleId, sig), methodBody, typeGenericParameters, methodGenericParameters);
+            var codeWriter = new CodeWriter(module, sig => signatureTokenBuilder(moduleId, sig), methodBody, Math.Max(methodBody.MaxStackSize, 4));
             codeWriter.WriteMethodBody();
 
          
