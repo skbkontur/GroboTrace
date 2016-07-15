@@ -15,15 +15,24 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
 
     // todo: refactor this
-    internal class ReflectionMethodBodyConverter : ByteBuffer
+    internal class CecilMethodBodyMaker : ByteBuffer
     {
-        public ReflectionMethodBodyConverter(byte[] code, int stackSize, bool initLocals, CORINFO_EH_CLAUSE[] exceptionClauses)
+        public CecilMethodBodyMaker(byte[] code, int stackSize, bool initLocals, CORINFO_EH_CLAUSE[] exceptionClauses)
             :base(code)
         {
             maxStackSize = stackSize;
             this.initLocals = initLocals;
             this.exceptionClauses = exceptionClauses;
         }
+
+        public CecilMethodBodyMaker(byte[] code, int stackSize, bool initLocals, byte[] exceptions)
+            : base(code)
+        {
+            maxStackSize = stackSize;
+            this.initLocals = initLocals;
+            exceptionsBytes = new ByteBuffer(exceptions);
+        }
+
 
         private int Offset { get { return position - 0; } }
 
@@ -45,7 +54,12 @@ namespace GroboTrace.Mono.Cecil.Cil
             body.init_locals = initLocals;
 
             ReadCode();
-            ReadExceptions();
+
+            if (exceptionClauses != null)
+                ReadExceptions();
+            else
+                if (exceptionsBytes.length > 0)
+                    ReadExceptionsFromBytes();
         }
 
         private void ReadCode()
@@ -114,22 +128,22 @@ namespace GroboTrace.Mono.Cecil.Cil
             case OperandType.InlineArg:
                 return (int)ReadUInt16();
             case OperandType.InlineSig:
-                return ReadToken();
+                return ReadToken(this);
             case OperandType.InlineString:
-                return ReadToken();
+                return ReadToken(this);
             case OperandType.InlineTok:
             case OperandType.InlineType:
             case OperandType.InlineMethod:
             case OperandType.InlineField:
-                return ReadToken();
+                return ReadToken(this);
             default:
                 throw new NotSupportedException();
             }
         }
 
-        public MetadataToken ReadToken()
+        public MetadataToken ReadToken(ByteBuffer buffer)
         {
-            return new MetadataToken(ReadUInt32());
+            return new MetadataToken(buffer.ReadUInt32());
         }
 
         private void ResolveBranches(Collection<Instruction> instructions)
@@ -215,13 +229,92 @@ namespace GroboTrace.Mono.Cecil.Cil
                 body.ExceptionHandlers.Add(handler);
 
             }
-
-
         }
+
+        private void ReadExceptionsFromBytes()
+        {
+            ReadSection();
+        }
+
+        private void ReadSection()
+        { 
+            const byte fat_format = 0x40;
+            const byte more_sects = 0x80;
+
+            var flags = exceptionsBytes.ReadByte();
+            if ((flags & fat_format) == 0)
+                ReadSmallSection();
+            else
+                ReadFatSection();
+
+            if ((flags & more_sects) != 0)
+                ReadSection();
+        }
+
+        private void ReadSmallSection()
+        {
+            var count = exceptionsBytes.ReadByte() / 12;
+            exceptionsBytes.Advance(2);
+
+            ReadExceptionHandlers(
+                count,
+                () => (int)exceptionsBytes.ReadUInt16(),
+                () => (int)exceptionsBytes.ReadByte());
+        }
+
+        private void ReadFatSection()
+        {
+            exceptionsBytes.position--;
+            var count = (exceptionsBytes.ReadInt32() >> 8) / 24;
+
+            ReadExceptionHandlers(
+                count,
+                exceptionsBytes.ReadInt32,
+                exceptionsBytes.ReadInt32);
+        }
+
+        // inline ?
+        private void ReadExceptionHandlers(int count, Func<int> read_entry, Func<int> read_length)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var handler = new ExceptionHandler(
+                    (ExceptionHandlerType)(read_entry() & 0x7));
+
+                handler.TryStart = GetInstruction(read_entry());
+                handler.TryEnd = GetInstruction(handler.TryStart.Offset + read_length());
+
+                handler.HandlerStart = GetInstruction(read_entry());
+                handler.HandlerEnd = GetInstruction(handler.HandlerStart.Offset + read_length());
+
+                ReadExceptionHandlerSpecific(handler);
+
+                this.body.ExceptionHandlers.Add(handler);
+            }
+        }
+
+        private void ReadExceptionHandlerSpecific(ExceptionHandler handler)
+        {
+            switch (handler.HandlerType)
+            {
+                case ExceptionHandlerType.Catch:
+                    handler.CatchType = ReadToken(exceptionsBytes);
+                    break;
+                case ExceptionHandlerType.Filter:
+                    handler.FilterStart = GetInstruction(exceptionsBytes.ReadInt32());
+                    break;
+                default:
+                    exceptionsBytes.Advance(4);
+                    break;
+            }
+        }
+
+        
 
         private int maxStackSize;
         private bool initLocals;
         private CORINFO_EH_CLAUSE[] exceptionClauses;
+        private ByteBuffer exceptionsBytes;
 
         private MethodBody body;
     }

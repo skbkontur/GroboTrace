@@ -274,21 +274,6 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	if (!lstrcmpW(assemblyNameBuffer, L"mscorlib"))
 		return S_OK;
 
-
-	/*if (!lstrcmpW(methodNameBuffer, L"Main")) {
-		OutputDebugStringW(L"Main skipped");
-		return S_OK;
-	}
-	if (!lstrcmpW(methodNameBuffer, L"add2")) {
-		OutputDebugStringW(L"add2 skipped");
-		return S_OK;
-	}
-	if (!lstrcmpW(methodNameBuffer, L"twice")) {
-		OutputDebugStringW(L"twice skipped");
-		return S_OK;
-	}*/
-
-
 	if (!callback)
 	{
 		OutputDebugString(L"Trying to load .NET lib");

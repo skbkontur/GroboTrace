@@ -11,6 +11,7 @@ using System.Threading;
 using GroboTrace.Injection;
 using GroboTrace.Mono.Cecil.Cil;
 using GroboTrace.Mono.Cecil.Metadata;
+using GroboTrace.Mono.Collections.Generic;
 
 using RGiesecke.DllExport;
 
@@ -258,8 +259,9 @@ namespace GroboTrace
             methodBody.variablesCount++;
             
 
+            ReplaceRetInstructions(methodBody.instructions, resultLocalIndex >= 0, resultLocalIndex);
 
-            var dummyInstr = Instruction.Create(OpCodes.Nop);
+           /* var dummyInstr = Instruction.Create(OpCodes.Nop);
             methodBody.instructions.Insert(methodBody.instructions.Count, dummyInstr);
             int index = 0;
             while(index < methodBody.instructions.Count)
@@ -280,7 +282,7 @@ namespace GroboTrace
 
                 }
                 ++index;
-            }
+            }*/
 
             var ticksReaderSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
             var ticksReaderToken = signatureTokenBuilder(moduleId, ticksReaderSignature);
@@ -454,6 +456,36 @@ namespace GroboTrace
             }
 
             return arrayIndex;
+        }
+
+
+        public static void ReplaceRetInstructions(Collection<Instruction> instructions, bool hasReturnType, int resultLocalIndex = -1)
+        {
+            if (hasReturnType && resultLocalIndex == -1)
+                throw new ArgumentException("hasReturnType = true, but resultLocalIndex = -1");
+            
+            var dummyInstr = Instruction.Create(OpCodes.Nop);
+            instructions.Insert(instructions.Count, dummyInstr);
+            int index = 0;
+            while (index < instructions.Count)
+            {
+                var instruction = instructions[index];
+                if (instruction.opcode == OpCodes.Ret)
+                {
+                    // replace Ret with Nop
+                    instructions[index].OpCode = OpCodes.Nop;
+                    ++index;
+
+                    if (hasReturnType)
+                    {
+                        instructions.Insert(index, Instruction.Create(OpCodes.Stloc, resultLocalIndex));
+                        ++index;
+                    }
+                    instructions.Insert(index, Instruction.Create(OpCodes.Br, dummyInstr));
+
+                }
+                ++index;
+            }
         }
 
 
