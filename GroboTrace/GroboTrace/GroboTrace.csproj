@@ -76,7 +76,7 @@
     <Compile Include="MethodCallTree.cs" />
     <Compile Include="MethodStats.cs" />
     <Compile Include="MethodStatsNode.cs" />
-    <Compile Include="Mono.Cecil.Cil\ReflectionMethodBodyMaker.cs" />
+    <Compile Include="Mono.Cecil.Cil\ReflectionMethodBodyBuilder.cs" />
     <Compile Include="Mono.Cecil.Cil\Code.cs" />
     <Compile Include="Mono.Cecil.Cil\CodeReader.cs" />
     <Compile Include="Mono.Cecil.Cil\CodeWriter.cs" />
@@ -89,7 +89,7 @@
     <Compile Include="Mono.Cecil.Cil\MethodSignatureReader.cs" />
     <Compile Include="Mono.Cecil.Cil\OpCode.cs" />
     <Compile Include="Mono.Cecil.Cil\OpCodes.cs" />
-    <Compile Include="Mono.Cecil.Cil\CecilMethodBodyMaker.cs" />
+    <Compile Include="Mono.Cecil.Cil\CecilMethodBodyBuilder.cs" />
     <Compile Include="Mono.Cecil.Metadata\ElementType.cs" />
     <Compile Include="Mono.Cecil.Metadata\MetadataToken.cs" />
     <Compile Include="Mono.Cecil.Metadata\TokenType.cs" />

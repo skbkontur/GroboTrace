@@ -15,9 +15,9 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
 
     // todo: refactor this
-    internal class CecilMethodBodyMaker : ByteBuffer
+    internal class CecilMethodBodyBuilder : ByteBuffer
     {
-        public CecilMethodBodyMaker(byte[] code, int stackSize, bool initLocals, CORINFO_EH_CLAUSE[] exceptionClauses)
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, CORINFO_EH_CLAUSE[] exceptionClauses)
             :base(code)
         {
             maxStackSize = stackSize;
@@ -25,7 +25,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             this.exceptionClauses = exceptionClauses;
         }
 
-        public CecilMethodBodyMaker(byte[] code, int stackSize, bool initLocals, byte[] exceptions)
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, byte[] exceptions)
             : base(code)
         {
             maxStackSize = stackSize;

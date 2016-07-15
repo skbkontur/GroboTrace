@@ -4,6 +4,7 @@ using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -15,7 +16,9 @@ using GroboTrace.Mono.Collections.Generic;
 
 using RGiesecke.DllExport;
 
+using ExceptionHandler = GroboTrace.Mono.Cecil.Cil.ExceptionHandler;
 using MethodBody = GroboTrace.Mono.Cecil.Cil.MethodBody;
+using OpCodes = GroboTrace.Mono.Cecil.Cil.OpCodes;
 
 namespace GroboTrace
 {
@@ -46,8 +49,6 @@ namespace GroboTrace
 
         static Zzz()
         {
-            __canon = typeof(object).Assembly.GetTypes().First(x => x.FullName == "System.__Canon");
-
             sizes = new int[32];
             counts = new int[32];
 
@@ -70,6 +71,17 @@ namespace GroboTrace
             methodStartedAddress = typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
             methodFinishedAddress = typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
 
+            HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new [] {typeof(Type)}, null));
+            HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new [] {typeof(Type), typeof(object)}, null));
+        }
+
+        private static void HookCreateDelegate(MethodInfo createDelegateMethod)
+        {
+            RuntimeHelpers.PrepareMethod(createDelegateMethod.MethodHandle);
+            var parameterTypes = new [] {typeof(DynamicMethod)}.Concat(createDelegateMethod.GetParameters().Select(x => x.ParameterType)).ToArray();
+            var method = new DynamicMethod(createDelegateMethod.Name + "_" + Guid.NewGuid(), createDelegateMethod.ReturnType, parameterTypes, typeof(DynamicMethod), true);
+            // todo
+            method.GetDynamicILInfo();
         }
 
         private static void EmitTicksReader()
@@ -500,12 +512,6 @@ namespace GroboTrace
             Debug.WriteLine("");
         }
 
-        public static void Trash()
-        {
-            trash = 1;
-        }
-
-
         public static object getMethodBase(int i, int j)
         {
             return methods[i][j];
@@ -522,11 +528,9 @@ namespace GroboTrace
         private static MapEntriesAllocator allocateForMapEntries;
 
         private static readonly MethodBase[][] methods = new MethodBase[32][];
-        public static volatile int trash;
         private static int numberOfMethods;
 
         private static readonly int[] sizes;
         private static readonly int[] counts;
-        public static Type __canon;
     }
 }

@@ -11,9 +11,9 @@ using GroboTrace.Mono.Collections.Generic;
 
 namespace GroboTrace.Mono.Cecil.Cil
 {
-    internal class ReflectionMethodBodyMaker
+    internal class ReflectionMethodBodyBuilder
     {
-        public ReflectionMethodBodyMaker(MethodBody cecilMethodBody)
+        public ReflectionMethodBodyBuilder(MethodBody cecilMethodBody)
         {
           
             body = cecilMethodBody;

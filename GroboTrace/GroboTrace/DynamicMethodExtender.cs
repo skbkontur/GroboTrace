@@ -102,7 +102,7 @@ namespace GroboTrace
             var exceptions = getExceptions(dynamicResolver, EHCount);
 
             
-            CecilMethodBody methodBody = new CecilMethodBodyMaker(code, stackSize, dynamicMethod.InitLocals, exceptions).GetCecilMethodBody();
+            CecilMethodBody methodBody = new CecilMethodBodyBuilder(code, stackSize, dynamicMethod.InitLocals, exceptions).GetCecilMethodBody();
 
             Console.WriteLine(methodBody);
 
@@ -202,7 +202,7 @@ namespace GroboTrace
 
 
 
-            var reflectionMethodBodyMaker = new ReflectionMethodBodyMaker(methodBody);
+            var reflectionMethodBodyMaker = new ReflectionMethodBodyBuilder(methodBody);
 
             
             //Console.WriteLine("Changed code");
@@ -221,7 +221,7 @@ namespace GroboTrace
             dynamicIlInfo.SetLocalSignature(localSignature);
 
 
-            var methodBody2 = new CecilMethodBodyMaker(reflectionMethodBodyMaker.GetCode(), stackSize, dynamicMethod.InitLocals, reflectionMethodBodyMaker.GetExceptions()).GetCecilMethodBody();
+            var methodBody2 = new CecilMethodBodyBuilder(reflectionMethodBodyMaker.GetCode(), stackSize, dynamicMethod.InitLocals, reflectionMethodBodyMaker.GetExceptions()).GetCecilMethodBody();
             Console.WriteLine(methodBody2);
 
           
