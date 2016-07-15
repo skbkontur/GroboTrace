@@ -17,49 +17,53 @@ namespace GroboTrace.Mono.Cecil.Cil
     // todo: refactor this
     internal class CecilMethodBodyBuilder : ByteBuffer
     {
-        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, CORINFO_EH_CLAUSE[] exceptionClauses)
+        private CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals)
             :base(code)
         {
-            maxStackSize = stackSize;
-            this.initLocals = initLocals;
-            this.exceptionClauses = exceptionClauses;
+            body = new MethodBody();
+
+            position = 0;
+
+            body.code_size = buffer.Length;
+            body.max_stack_size = stackSize;
+            body.init_locals = initLocals;
+
+            ReadCode();
         }
 
-        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, byte[] exceptions)
-            : base(code)
+
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, CORINFO_EH_CLAUSE[] exceptionClauses)
+            :this(code, stackSize, initLocals)
         {
-            maxStackSize = stackSize;
-            this.initLocals = initLocals;
-            exceptionsBytes = new ByteBuffer(exceptions);
+            ReadExceptions(exceptionClauses);
         }
+
+
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, byte[] exceptions)
+            : this(code, stackSize, initLocals)
+        {
+
+            exceptionsBytes = new ByteBuffer(exceptions);
+
+            if (exceptionsBytes.length > 0)
+                ReadExceptionsFromBytes();
+
+        }
+
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, IList<ExceptionHandlingClause> exceptionClauses)
+            : this(code, stackSize, initLocals)
+        {
+            ReadExceptions(exceptionClauses);
+        }
+
+
 
 
         private int Offset { get { return position - 0; } }
 
         public MethodBody GetCecilMethodBody()
         {
-            body = new MethodBody();
-
-            ReadMethodBodyInternal();
-
             return body;
-        }
-
-        private void ReadMethodBodyInternal()
-        {
-            position = 0;
-
-            body.code_size = buffer.Length;
-            body.max_stack_size = maxStackSize;
-            body.init_locals = initLocals;
-
-            ReadCode();
-
-            if (exceptionClauses != null)
-                ReadExceptions();
-            else
-                if (exceptionsBytes.length > 0)
-                    ReadExceptionsFromBytes();
         }
 
         private void ReadCode()
@@ -204,7 +208,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             return null;
         }
 
-        private void ReadExceptions()
+        private void ReadExceptions(CORINFO_EH_CLAUSE[] exceptionClauses)
         {
             foreach (var exceptionClause in exceptionClauses)
             {
@@ -230,6 +234,35 @@ namespace GroboTrace.Mono.Cecil.Cil
 
             }
         }
+
+        private void ReadExceptions(IList<ExceptionHandlingClause> exceptionClauses)
+        {
+            foreach (var exceptionClause in exceptionClauses)
+            {
+                var handler = new ExceptionHandler((ExceptionHandlerType)exceptionClause.Flags);
+
+                handler.TryStart = GetInstruction(exceptionClause.TryOffset);
+                handler.TryEnd = GetInstruction(handler.TryStart.Offset + exceptionClause.TryLength);
+
+                handler.HandlerStart = GetInstruction(exceptionClause.HandlerOffset);
+                handler.HandlerEnd = GetInstruction(handler.HandlerStart.Offset + exceptionClause.HandlerLength);
+
+                switch (handler.HandlerType)
+                {
+                    case ExceptionHandlerType.Catch:
+                        handler.CatchType = new MetadataToken((uint)exceptionClause.CatchType.MetadataToken);
+                        break;
+                    case ExceptionHandlerType.Filter:
+                        handler.FilterStart = GetInstruction(exceptionClause.FilterOffset);
+                        break;
+                }
+
+                body.ExceptionHandlers.Add(handler);
+
+            }
+        }
+
+
 
         private void ReadExceptionsFromBytes()
         {
@@ -309,11 +342,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             }
         }
 
-        
 
-        private int maxStackSize;
-        private bool initLocals;
-        private CORINFO_EH_CLAUSE[] exceptionClauses;
         private ByteBuffer exceptionsBytes;
 
         private MethodBody body;

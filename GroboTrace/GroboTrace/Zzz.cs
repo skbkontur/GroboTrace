@@ -80,6 +80,18 @@ namespace GroboTrace
             RuntimeHelpers.PrepareMethod(createDelegateMethod.MethodHandle);
             var parameterTypes = new [] {typeof(DynamicMethod)}.Concat(createDelegateMethod.GetParameters().Select(x => x.ParameterType)).ToArray();
             var method = new DynamicMethod(createDelegateMethod.Name + "_" + Guid.NewGuid(), createDelegateMethod.ReturnType, parameterTypes, typeof(DynamicMethod), true);
+
+            var oldMethodBody = createDelegateMethod.GetMethodBody();
+            var code = oldMethodBody.GetILAsByteArray();
+            var stackSize = Math.Max(oldMethodBody.MaxStackSize, 6); // todo посчитать точнее
+            var initLocals = oldMethodBody.InitLocals;
+            var exceptionClauses = oldMethodBody.ExceptionHandlingClauses;
+
+            var methodBody = new CecilMethodBodyBuilder(code, stackSize, initLocals, exceptionClauses).GetCecilMethodBody();
+            
+            sendToDebug("Plain", createDelegateMethod, methodBody);
+
+
             // todo
             method.GetDynamicILInfo();
         }
