@@ -326,7 +326,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			OutputDebugString(L"Failed to obtain 'Trace' method addr");
 		else
 			OutputDebugString(L"Successfully got 'Trace' method addr");
-		callback = reinterpret_cast<SharpResponse(*)(FunctionID, WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
+		callback = reinterpret_cast<SharpResponse(*)(WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
 	}
 
 	LPCBYTE methodBody;
@@ -336,7 +336,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	SharpResponse sharpResponse = SharpResponse();
 	sharpResponse.newMethodBody = nullptr;
 
-	sharpResponse = callback(functionId, assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody, static_cast<void*>(&allocateForMethodBody));
+	sharpResponse = callback(assemblyNameBuffer, moduleNameBuffer, moduleId, methodDefToken, (char*)methodBody, static_cast<void*>(&allocateForMethodBody));
 
 	if (sharpResponse.newMethodBody != nullptr)
 	{

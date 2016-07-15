@@ -145,7 +145,7 @@ namespace GroboTrace
         }
 
         [DllExport]
-        public static SharpResponse Trace(UIntPtr functionId,
+        public static SharpResponse Trace(
                                   [MarshalAs(UnmanagedType.LPWStr)] string assemblyName,
                                   [MarshalAs(UnmanagedType.LPWStr)] string moduleName,
                                   UIntPtr moduleId,
@@ -182,7 +182,8 @@ namespace GroboTrace
             }
 
             int i, j;
-            AddMethod(method, out i, out j);
+            long functionId;
+            AddMethod(method, out i, out j, out functionId);
 
             var rawSignature = module.ResolveSignature((int)methodToken);
             var methodSignature = new MethodSignatureReader(rawSignature).Read();
@@ -401,9 +402,10 @@ namespace GroboTrace
             return response;
         }
 
-        private static void AddMethod(MethodBase method, out int i, out int j)
+        public static void AddMethod(MethodBase method, out int i, out int j, out long functionId)
         {
-            int index = Interlocked.Increment(ref numberOfMethods) - 1;
+            var index = Interlocked.Increment(ref numberOfMethods) - 1;
+            functionId = index + 1;
             int adjustedIndex = index;
 
             int arrayIndex = GetArrayIndex(index + 1);
@@ -419,6 +421,7 @@ namespace GroboTrace
             methods[arrayIndex][adjustedIndex] = method;
             i = arrayIndex;
             j = adjustedIndex;
+            
         }
 
         private static int GetArrayIndex(int count)
@@ -509,11 +512,11 @@ namespace GroboTrace
         }
 
         public delegate long TicksReaderDelegate();
-        private static IntPtr ticksReaderAddress;
+        public static IntPtr ticksReaderAddress;
         public static TicksReaderDelegate TicksReader;
-        private static IntPtr getMethodBaseFunctionAddress;
-        private static IntPtr methodStartedAddress;
-        private static IntPtr methodFinishedAddress;
+        public static IntPtr getMethodBaseFunctionAddress;
+        public static IntPtr methodStartedAddress;
+        public static IntPtr methodFinishedAddress;
 
         private static Func<UIntPtr, byte[], MetadataToken> signatureTokenBuilder;
         private static MapEntriesAllocator allocateForMapEntries;
