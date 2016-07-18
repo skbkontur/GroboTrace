@@ -9,6 +9,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 
+using GrEmit;
+
 using GroboTrace.Injection;
 using GroboTrace.Mono.Cecil;
 using GroboTrace.Mono.Cecil.Cil;
@@ -198,7 +200,15 @@ namespace GroboTrace
                     *pointer++ = *pp++;
             }
 
-            TicksReader = (TicksReaderDelegate)Marshal.GetDelegateForFunctionPointer(ticksReaderAddress, typeof(TicksReaderDelegate));
+            //TicksReader = (TicksReaderDelegate)Marshal.GetDelegateForFunctionPointer(ticksReaderAddress, typeof(TicksReaderDelegate));
+            var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(long), Type.EmptyTypes, typeof(string), true);
+            using(var il = new GroboIL(method))
+            {
+                il.Ldc_IntPtr(ticksReaderAddress);
+                il.Calli(CallingConventions.Standard, typeof(long), Type.EmptyTypes);
+                il.Ret();
+            }
+            TicksReader = (Func<long>)method.CreateDelegate(typeof(Func<long>));
         }
 
 
@@ -592,9 +602,8 @@ namespace GroboTrace
             return methods[i][j];
         }
 
-        public delegate long TicksReaderDelegate();
         public static IntPtr ticksReaderAddress;
-        public static TicksReaderDelegate TicksReader;
+        public static Func<long> TicksReader;
         public static IntPtr getMethodBaseFunctionAddress;
         public static IntPtr methodStartedAddress;
         public static IntPtr methodFinishedAddress;
