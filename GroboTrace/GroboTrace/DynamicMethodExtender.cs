@@ -30,7 +30,13 @@ namespace GroboTrace
 
     public class DynamicMethodExtender
     {
-        public DynamicMethodExtender(DynamicMethod dynamicMethod)
+        public static void Trace(DynamicMethod dynamicMethod)
+        {
+            new DynamicMethodExtender(dynamicMethod).Extend();
+        }
+
+
+        private DynamicMethodExtender(DynamicMethod dynamicMethod)
         {
             this.dynamicMethod = dynamicMethod;
             hasReturnType = dynamicMethod.ReturnType != typeof(void);
@@ -65,7 +71,7 @@ namespace GroboTrace
 
 
 
-        public void Trace()
+        private void Extend()
         {
             int i, j;
             long functionId;
@@ -202,7 +208,7 @@ namespace GroboTrace
 
 
 
-            var reflectionMethodBodyMaker = new ReflectionMethodBodyBuilder(methodBody);
+            var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
 
             
             //Console.WriteLine("Changed code");
@@ -213,15 +219,15 @@ namespace GroboTrace
             
             
 
-            dynamicIlInfo.SetCode(reflectionMethodBodyMaker.GetCode(), Math.Max(stackSize, 4));
+            dynamicIlInfo.SetCode(reflectionMethodBodyBuilder.GetCode(), Math.Max(stackSize, 4));
 
-            if (reflectionMethodBodyMaker.HasExceptions())
-                dynamicIlInfo.SetExceptions(reflectionMethodBodyMaker.GetExceptions());
+            if (reflectionMethodBodyBuilder.HasExceptions())
+                dynamicIlInfo.SetExceptions(reflectionMethodBodyBuilder.GetExceptions());
 
             dynamicIlInfo.SetLocalSignature(localSignature);
 
 
-            var methodBody2 = new CecilMethodBodyBuilder(reflectionMethodBodyMaker.GetCode(), stackSize, dynamicMethod.InitLocals, reflectionMethodBodyMaker.GetExceptions()).GetCecilMethodBody();
+            var methodBody2 = new CecilMethodBodyBuilder(reflectionMethodBodyBuilder.GetCode(), stackSize, dynamicMethod.InitLocals, reflectionMethodBodyBuilder.GetExceptions()).GetCecilMethodBody();
             Console.WriteLine(methodBody2);
 
           

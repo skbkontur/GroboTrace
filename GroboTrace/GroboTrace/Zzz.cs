@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 
 using GroboTrace.Injection;
+using GroboTrace.Mono.Cecil;
 using GroboTrace.Mono.Cecil.Cil;
 using GroboTrace.Mono.Cecil.Metadata;
 using GroboTrace.Mono.Collections.Generic;
@@ -79,21 +80,83 @@ namespace GroboTrace
         {
             RuntimeHelpers.PrepareMethod(createDelegateMethod.MethodHandle);
             var parameterTypes = new [] {typeof(DynamicMethod)}.Concat(createDelegateMethod.GetParameters().Select(x => x.ParameterType)).ToArray();
-            var method = new DynamicMethod(createDelegateMethod.Name + "_" + Guid.NewGuid(), createDelegateMethod.ReturnType, parameterTypes, typeof(DynamicMethod), true);
+            var dynamicMethod = new DynamicMethod(createDelegateMethod.Name + "_" + Guid.NewGuid(), createDelegateMethod.ReturnType, parameterTypes, typeof(DynamicMethod), true);
 
             var oldMethodBody = createDelegateMethod.GetMethodBody();
             var code = oldMethodBody.GetILAsByteArray();
-            var stackSize = Math.Max(oldMethodBody.MaxStackSize, 6); // todo посчитать точнее
+            var stackSize = Math.Max(oldMethodBody.MaxStackSize, 4); // todo посчитать точнее
             var initLocals = oldMethodBody.InitLocals;
             var exceptionClauses = oldMethodBody.ExceptionHandlingClauses;
-
+            var localSignature = new byte[0];
+            if (oldMethodBody.LocalSignatureMetadataToken != 0)
+                localSignature = createDelegateMethod.Module.ResolveSignature(oldMethodBody.LocalSignatureMetadataToken);
+            
             var methodBody = new CecilMethodBodyBuilder(code, stackSize, initLocals, exceptionClauses).GetCecilMethodBody();
             
             sendToDebug("Plain", createDelegateMethod, methodBody);
 
+            var dynamicILInfo = dynamicMethod.GetDynamicILInfo();
 
-            // todo
-            method.GetDynamicILInfo();
+            foreach (var instruction in methodBody.instructions)
+            {
+                if (!(instruction.Operand is MetadataToken))
+                    continue;
+
+                //Debug.WriteLine(instruction);
+
+                var token = (MetadataToken)instruction.Operand;
+
+                switch (token.TokenType)
+                {
+                case TokenType.Method:
+                    var methodHandle = createDelegateMethod.Module.ResolveMethod(token.ToInt32()).MethodHandle;
+                    instruction.Operand = new MetadataToken((uint)dynamicILInfo.GetTokenFor(methodHandle));
+                    break;
+                case TokenType.Field:
+                    var fieldHandle = createDelegateMethod.Module.ResolveField(token.ToInt32()).FieldHandle;
+                    instruction.Operand = new MetadataToken((uint)dynamicILInfo.GetTokenFor(fieldHandle));
+                    break;
+                case TokenType.TypeDef:
+                case TokenType.TypeRef:
+                    var typeHandle = createDelegateMethod.Module.ResolveType(token.ToInt32()).TypeHandle;
+                    instruction.Operand = new MetadataToken((uint)dynamicILInfo.GetTokenFor(typeHandle));
+                    break;
+                case TokenType.Signature:
+                    var signatureBytes = createDelegateMethod.Module.ResolveSignature(token.ToInt32());
+                    instruction.Operand = new MetadataToken((uint)dynamicILInfo.GetTokenFor(signatureBytes));
+                    break;
+                case TokenType.String:
+                    var str = createDelegateMethod.Module.ResolveString(token.ToInt32());
+                    instruction.Operand = new MetadataToken((uint)dynamicILInfo.GetTokenFor(str));
+                    break;
+                }
+                
+
+                //Debug.WriteLine(instruction);
+            }
+
+            var traceHandle = typeof(DynamicMethodExtender).GetMethod("Trace", BindingFlags.Static | BindingFlags.Public).MethodHandle;
+            var traceToken = new MetadataToken((uint)dynamicILInfo.GetTokenFor(traceHandle));
+
+            int startIndex = 0;
+
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldarg_0));
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Call, traceToken));
+
+            var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
+
+            dynamicILInfo.SetCode(reflectionMethodBodyBuilder.GetCode(), stackSize);
+
+            if (reflectionMethodBodyBuilder.HasExceptions())
+                dynamicILInfo.SetExceptions(reflectionMethodBodyBuilder.GetExceptions());
+
+            dynamicILInfo.SetLocalSignature(localSignature);
+
+            var methodBody2 = new CecilMethodBodyBuilder(reflectionMethodBodyBuilder.GetCode(), stackSize, dynamicMethod.InitLocals, reflectionMethodBodyBuilder.GetExceptions()).GetCecilMethodBody();
+
+            
+            sendToDebug("Changed", createDelegateMethod, methodBody2);
+            
         }
 
         private static void EmitTicksReader()

@@ -32,7 +32,7 @@ namespace Tests
             }
             
 
-            new DynamicMethodExtender(dynamicMethod).Trace();
+            DynamicMethodExtender.Trace(dynamicMethod);
 
             var func = (Func<int, int, int>)dynamicMethod.CreateDelegate(typeof(Func<int, int, int>));
  
@@ -68,7 +68,7 @@ namespace Tests
                 il.Ret();
             }
 
-            new DynamicMethodExtender(dynamicMethod).Trace();
+            DynamicMethodExtender.Trace(dynamicMethod);
 
             var func = (Func<int, int, int>)dynamicMethod.CreateDelegate(typeof(Func<int, int, int>));
 
