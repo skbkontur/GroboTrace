@@ -100,7 +100,7 @@
     </Link>
     <CustomBuildStep>
       <Command>
-</Command>
+      </Command>
     </CustomBuildStep>
     <PostBuildEvent>
       <Command>copy $(TargetDir)$(TargetName).dll $(SolutionDir)..\Assemblies\</Command>
@@ -132,7 +132,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
