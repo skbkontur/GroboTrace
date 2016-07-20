@@ -70,10 +70,10 @@ namespace GroboTrace.Mono.Cecil.Cil
 
             WriteByte(flags);
             WriteByte(0x30);
-            WriteInt16((short)body.max_stack_size);
+            WriteInt16((short)body.MaxStackSize);
             WriteInt32(body.code_size);
-            body.local_var_token = GetVariablesSignature();
-            WriteMetadataToken(body.local_var_token);
+            body.LocalVarToken = GetVariablesSignature();
+            WriteMetadataToken(body.LocalVarToken);
         }
 
         private MetadataToken GetVariablesSignature()
@@ -101,7 +101,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             for(int i = 0; i < size; i++)
             {
                 var instruction = items[i];
-                WriteOpCode(instruction.opcode);
+                WriteOpCode(instruction.OpCode);
                 WriteOperand(instruction);
             }
         }
@@ -119,12 +119,12 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         private void WriteOperand(Instruction instruction)
         {
-            var opcode = instruction.opcode;
+            var opcode = instruction.OpCode;
             var operand_type = opcode.OperandType;
             if(operand_type == OperandType.InlineNone)
                 return;
 
-            var operand = instruction.operand;
+            var operand = instruction.Operand;
             if(operand == null)
                 throw new ArgumentException();
 
@@ -203,10 +203,10 @@ namespace GroboTrace.Mono.Cecil.Cil
             if(instruction == null)
             {
                 var last = body.instructions[body.instructions.size - 1];
-                return last.offset + last.GetSize();
+                return last.Offset + last.GetSize();
             }
 
-            return instruction.offset;
+            return instruction.Offset;
         }
 
         private bool RequiresFatHeader()
@@ -234,7 +234,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             for(int i = 0; i < count; i++)
             {
                 var instruction = items[i];
-                instruction.offset = offset;
+                instruction.Offset = offset;
                 offset += instruction.GetSize();
 
                 if(maxStack == null)
@@ -242,7 +242,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             }
 
             body.code_size = offset;
-            body.max_stack_size = maxStack ?? max_stack;
+            body.MaxStackSize = maxStack ?? max_stack;
         }
 
         private void ComputeExceptionHandlerStackSize(ref Dictionary<Instruction, int> stack_sizes)
@@ -296,14 +296,14 @@ namespace GroboTrace.Mono.Cecil.Cil
             if(stack_size == 0)
                 return;
 
-            switch(instruction.opcode.OperandType)
+            switch(instruction.OpCode.OperandType)
             {
             case OperandType.ShortInlineBrTarget:
             case OperandType.InlineBrTarget:
-                CopyBranchStackSize(ref stack_sizes, (Instruction)instruction.operand, stack_size);
+                CopyBranchStackSize(ref stack_sizes, (Instruction)instruction.Operand, stack_size);
                 break;
             case OperandType.InlineSwitch:
-                var targets = (Instruction[])instruction.operand;
+                var targets = (Instruction[])instruction.Operand;
                 for(int i = 0; i < targets.Length; i++)
                     CopyBranchStackSize(ref stack_sizes, targets[i], stack_size);
                 break;
@@ -326,7 +326,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         private static void ComputeStackSize(Instruction instruction, ref int stack_size)
         {
-            switch(instruction.opcode.FlowControl)
+            switch(instruction.OpCode.FlowControl)
             {
             case FlowControl.Branch:
             case FlowControl.Break:
@@ -339,16 +339,16 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         private void ComputeStackDelta(Instruction instruction, ref int stack_size)
         {
-            switch(instruction.opcode.FlowControl)
+            switch(instruction.OpCode.FlowControl)
             {
             case FlowControl.Call:
                 {
-                    var token = (MetadataToken)instruction.operand;
+                    var token = (MetadataToken)instruction.Operand;
                     bool hasThis;
                     int parametersCount;
                     bool hasReturnType;
                     
-                    if (instruction.opcode.Code == Code.Calli)
+                    if (instruction.OpCode.Code == Code.Calli)
                     {
                         var signature = module.ResolveSignature(token.ToInt32());
                         var parsedSignature = new MethodSignatureReader(signature).Read();
@@ -369,21 +369,21 @@ namespace GroboTrace.Mono.Cecil.Cil
 
 
                     // pop 'this' argument
-                    if (hasThis && instruction.opcode.Code != Code.Newobj)
+                    if (hasThis && instruction.OpCode.Code != Code.Newobj)
                     stack_size--;
                     // pop normal arguments
                     stack_size -= parametersCount;
                     // pop function pointer
-                    if(instruction.opcode.Code == Code.Calli)
+                    if(instruction.OpCode.Code == Code.Calli)
                         stack_size--;
                     // push return value
-                    if (hasReturnType || instruction.opcode.Code == Code.Newobj)
+                    if (hasReturnType || instruction.OpCode.Code == Code.Newobj)
                         stack_size++;
                     break;
                 }
             default:
-                ComputePopDelta(instruction.opcode.StackBehaviourPop, ref stack_size);
-                ComputePushDelta(instruction.opcode.StackBehaviourPush, ref stack_size);
+                ComputePopDelta(instruction.OpCode.StackBehaviourPop, ref stack_size);
+                ComputePushDelta(instruction.OpCode.StackBehaviourPush, ref stack_size);
                 break;
             }
         }

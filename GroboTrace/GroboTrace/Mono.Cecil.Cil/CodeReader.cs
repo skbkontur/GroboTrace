@@ -61,13 +61,13 @@ namespace GroboTrace.Mono.Cecil.Cil
         private void ReadFatMethod()
         {
             var flags = ReadUInt16();
-            body.max_stack_size = ReadUInt16();
+            body.MaxStackSize = ReadUInt16();
             body.code_size = (int)ReadUInt32();
-            body.local_var_token = new MetadataToken(ReadUInt32());
-            body.init_locals = (flags & 0x10) != 0;
+            body.LocalVarToken = new MetadataToken(ReadUInt32());
+            body.InitLocals = (flags & 0x10) != 0;
 
-            if(body.local_var_token.RID != 0)
-                ReadVariables(body.local_var_token);
+            if(body.LocalVarToken.RID != 0)
+                ReadVariables(body.LocalVarToken);
 
             ReadCode();
 
@@ -112,7 +112,7 @@ namespace GroboTrace.Mono.Cecil.Cil
                 var current = new Instruction(offset, opcode);
 
                 if(opcode.OperandType != OperandType.InlineNone)
-                    current.operand = ReadOperand(current);
+                    current.Operand = ReadOperand(current);
 
                 instructions.Add(current);
             }
@@ -130,7 +130,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         private object ReadOperand(Instruction instruction)
         {
-            switch(instruction.opcode.OperandType)
+            switch(instruction.OpCode.OperandType)
             {
             case OperandType.InlineSwitch:
                 var length = ReadInt32();
@@ -144,7 +144,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             case OperandType.InlineBrTarget:
                 return ReadInt32() + Offset;
             case OperandType.ShortInlineI:
-                if(instruction.opcode == OpCodes.Ldc_I4_S)
+                if(instruction.OpCode == OpCodes.Ldc_I4_S)
                     return ReadSByte();
 
                 return ReadByte();
@@ -186,19 +186,19 @@ namespace GroboTrace.Mono.Cecil.Cil
             for(int i = 0; i < size; i++)
             {
                 var instruction = items[i];
-                switch(instruction.opcode.OperandType)
+                switch(instruction.OpCode.OperandType)
                 {
                 case OperandType.ShortInlineBrTarget:
                 case OperandType.InlineBrTarget:
-                    instruction.operand = GetInstruction((int)instruction.operand);
+                    instruction.Operand = GetInstruction((int)instruction.Operand);
                     break;
                 case OperandType.InlineSwitch:
-                    var offsets = (int[])instruction.operand;
+                    var offsets = (int[])instruction.Operand;
                     var branches = new Instruction[offsets.Length];
                     for(int j = 0; j < offsets.Length; j++)
                         branches[j] = GetInstruction(offsets[j]);
 
-                    instruction.operand = branches;
+                    instruction.Operand = branches;
                     break;
                 }
             }
@@ -213,7 +213,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         {
             var size = instructions.size;
             var items = instructions.items;
-            if(offset < 0 || offset > items[size - 1].offset)
+            if(offset < 0 || offset > items[size - 1].Offset)
                 return null;
 
             int min = 0;
@@ -222,7 +222,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             {
                 int mid = min + ((max - min) / 2);
                 var instruction = items[mid];
-                var instruction_offset = instruction.offset;
+                var instruction_offset = instruction.Offset;
 
                 if(offset == instruction_offset)
                     return instruction;

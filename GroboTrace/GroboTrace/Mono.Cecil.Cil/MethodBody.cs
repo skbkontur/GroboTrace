@@ -18,13 +18,13 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
     public sealed class MethodBody
     {
-        public int MaxStackSize { get { return max_stack_size; } set { max_stack_size = value; } }
+        public int MaxStackSize { get; set; }
 
-        public int CodeSize { get { return code_size; } }
+        public int CodeSize { get { return code_size; } } // todo: refactor: подсчет codesiz'а
 
-        public bool InitLocals { get { return init_locals; } set { init_locals = value; } }
+        public bool InitLocals { get; set; }
 
-        public MetadataToken LocalVarToken { get { return local_var_token; } set { local_var_token = value; } }
+        public MetadataToken LocalVarToken { get; set; }
 
         public Collection<Instruction> Instructions { get { return instructions ?? (instructions = new InstructionCollection()); } }
 
@@ -62,10 +62,10 @@ namespace GroboTrace.Mono.Cecil.Cil
             return result.ToString();
         }
 
-        internal int max_stack_size;
+        //internal int max_stack_size;
         internal int code_size;
-        internal bool init_locals;
-        internal MetadataToken local_var_token;
+        //internal bool init_locals;
+        //internal MetadataToken local_var_token;
 
         public bool isTiny;
 
@@ -92,8 +92,8 @@ namespace GroboTrace.Mono.Cecil.Cil
                 return;
 
             var previous = items[index - 1];
-            previous.next = item;
-            item.previous = previous;
+            previous.Next = item;
+            item.Previous = previous;
         }
 
         protected override void OnInsert(Instruction item, int index)
@@ -105,45 +105,45 @@ namespace GroboTrace.Mono.Cecil.Cil
             if(current == null)
             {
                 var last = items[index - 1];
-                last.next = item;
-                item.previous = last;
+                last.Next = item;
+                item.Previous = last;
                 return;
             }
 
-            var previous = current.previous;
+            var previous = current.Previous;
             if(previous != null)
             {
-                previous.next = item;
-                item.previous = previous;
+                previous.Next = item;
+                item.Previous = previous;
             }
 
-            current.previous = item;
-            item.next = current;
+            current.Previous = item;
+            item.Next = current;
         }
 
         protected override void OnSet(Instruction item, int index)
         {
             var current = items[index];
 
-            item.previous = current.previous;
-            item.next = current.next;
+            item.Previous = current.Previous;
+            item.Next = current.Next;
 
-            current.previous = null;
-            current.next = null;
+            current.Previous = null;
+            current.Next = null;
         }
 
         protected override void OnRemove(Instruction item, int index)
         {
-            var previous = item.previous;
+            var previous = item.Previous;
             if(previous != null)
-                previous.next = item.next;
+                previous.Next = item.Next;
 
-            var next = item.next;
+            var next = item.Next;
             if(next != null)
-                next.previous = item.previous;
+                next.Previous = item.Previous;
 
-            item.previous = null;
-            item.next = null;
+            item.Previous = null;
+            item.Next = null;
         }
     }
 }

@@ -19,34 +19,34 @@ namespace GroboTrace.Mono.Cecil.Cil
     {
         internal Instruction(int offset, OpCode opCode)
         {
-            this.offset = offset;
-            this.opcode = opCode;
+            Offset = offset;
+            OpCode = opCode;
         }
 
         internal Instruction(OpCode opcode, object operand)
         {
-            this.opcode = opcode;
-            this.operand = operand;
+            OpCode = opcode;
+            Operand = operand;
         }
 
-        public int Offset { get { return offset; } set { offset = value; } }
+        public int Offset { get; set; }
 
-        public OpCode OpCode { get { return opcode; } set { opcode = value; } }
+        public OpCode OpCode { get; set; }
 
-        public object Operand { get { return operand; } set { operand = value; } }
+        public object Operand { get; set; }
 
-        public Instruction Previous { get { return previous; } set { previous = value; } }
+        public Instruction Previous { get; set; }
 
-        public Instruction Next { get { return next; } set { next = value; } }
+        public Instruction Next { get; set; }
 
         public int GetSize()
         {
-            int size = opcode.Size;
+            int size = OpCode.Size;
 
-            switch(opcode.OperandType)
+            switch(OpCode.OperandType)
             {
             case OperandType.InlineSwitch:
-                return size + (1 + ((Instruction[])operand).Length) * 4;
+                return size + (1 + ((Instruction[])Operand).Length) * 4;
             case OperandType.InlineI8:
             case OperandType.InlineR:
                 return size + 8;
@@ -80,21 +80,21 @@ namespace GroboTrace.Mono.Cecil.Cil
             AppendLabel(instruction, this);
             instruction.Append(':');
             instruction.Append(' ');
-            instruction.Append(opcode.Name);
+            instruction.Append(OpCode.Name);
 
-            if (operand == null)
+            if (Operand == null)
                 return instruction.ToString();
 
             instruction.Append(' ');
 
-            switch (opcode.OperandType)
+            switch (OpCode.OperandType)
             {
                 case OperandType.ShortInlineBrTarget:
                 case OperandType.InlineBrTarget:
-                    AppendLabel(instruction, (Instruction)operand);
+                    AppendLabel(instruction, (Instruction)Operand);
                     break;
                 case OperandType.InlineSwitch:
-                    var labels = (Instruction[])operand;
+                    var labels = (Instruction[])Operand;
                     for (int i = 0; i < labels.Length; i++)
                     {
                         if (i > 0)
@@ -105,11 +105,11 @@ namespace GroboTrace.Mono.Cecil.Cil
                     break;
                 case OperandType.InlineString:
                     instruction.Append('\"');
-                    instruction.Append(operand);
+                    instruction.Append(Operand);
                     instruction.Append('\"');
                     break;
                 default:
-                    instruction.Append(operand);
+                    instruction.Append(Operand);
                     break;
             }
 
@@ -119,7 +119,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         private static void AppendLabel(StringBuilder builder, Instruction instruction)
         {
             builder.Append("IL_");
-            builder.Append(instruction.offset.ToString("D4"));
+            builder.Append(instruction.Offset.ToString("D4"));
         }
 
         public static Instruction Create(OpCode opcode)
@@ -213,11 +213,5 @@ namespace GroboTrace.Mono.Cecil.Cil
             return new Instruction(opcode, targets);
         }
 
-        internal int offset;
-        internal OpCode opcode;
-        internal object operand;
-
-        internal Instruction previous;
-        internal Instruction next;
     }
 }

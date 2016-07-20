@@ -11,7 +11,7 @@ using GroboTrace.Mono.Collections.Generic;
 
 namespace GroboTrace.Mono.Cecil.Cil
 {
-    internal class ReflectionMethodBodyBuilder
+    public class ReflectionMethodBodyBuilder
     {
         public ReflectionMethodBodyBuilder(MethodBody cecilMethodBody)
         {
@@ -46,7 +46,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             for (int i = 0; i < size; i++)
             {
                 var instruction = items[i];
-                WriteOpCode(instruction.opcode);
+                WriteOpCode(instruction.OpCode);
                 WriteOperand(instruction);
             }
         }
@@ -65,12 +65,12 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         private void WriteOperand(Instruction instruction)
         {
-            var opcode = instruction.opcode;
+            var opcode = instruction.OpCode;
             var operand_type = opcode.OperandType;
             if (operand_type == OperandType.InlineNone)
                 return;
 
-            var operand = instruction.operand;
+            var operand = instruction.Operand;
             if (operand == null)
                 throw new ArgumentException();
 
@@ -257,10 +257,10 @@ namespace GroboTrace.Mono.Cecil.Cil
             if (instruction == null)
             {
                 var last = body.instructions[body.instructions.size - 1];
-                return last.offset + last.GetSize();
+                return last.Offset + last.GetSize();
             }
 
-            return instruction.offset;
+            return instruction.Offset;
         }
 
         private void WriteMetadataToken(ByteBuffer buffer, MetadataToken token)

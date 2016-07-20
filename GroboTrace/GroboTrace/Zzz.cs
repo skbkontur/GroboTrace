@@ -678,7 +678,7 @@ namespace GroboTrace
             while(index < instructions.Count)
             {
                 var instruction = instructions[index];
-                if(instruction.opcode == OpCodes.Ret)
+                if (instruction.OpCode == OpCodes.Ret)
                 {
                     // replace Ret with Nop
                     instructions[index].OpCode = OpCodes.Nop;
