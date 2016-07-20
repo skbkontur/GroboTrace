@@ -267,7 +267,7 @@ namespace GroboTrace
 
                 var token = (MetadataToken)instruction.Operand;
 
-                instruction.Operand = new MetadataToken((uint)GetTokenFor(dynamicILInfo, createDelegateMethod.Module, token, instruction.opcode));
+                instruction.Operand = new MetadataToken((uint)GetTokenFor(dynamicILInfo, createDelegateMethod.Module, token, instruction.OpCode));
 
                 //Debug.WriteLine(instruction);
             }
