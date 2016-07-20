@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -98,8 +99,11 @@ namespace GroboTrace
 
             code = (byte[])getCodeInfo.Invoke(dynamicResolver, parameters);
 
-            //Console.WriteLine("Initial code");
-            //Console.WriteLine(String.Join(", ", code));
+            if (code == null )
+                Debug.WriteLine("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+
+            Debug.WriteLine("Initial code");
+            Debug.WriteLine(String.Join(", ", code));
 
             stackSize = (int)parameters[0];
             initLocals = (int)parameters[1];
@@ -110,7 +114,7 @@ namespace GroboTrace
             
             CecilMethodBody methodBody = new CecilMethodBodyBuilder(code, stackSize, dynamicMethod.InitLocals, exceptions).GetCecilMethodBody();
 
-            Console.WriteLine(methodBody);
+            Debug.WriteLine(methodBody);
 
             
 
@@ -211,8 +215,8 @@ namespace GroboTrace
             var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
 
             
-            //Console.WriteLine("Changed code");
-            //Console.WriteLine(String.Join(", ", reflectionMethodBodyMaker.GetCode()));
+            Debug.WriteLine("Changed code");
+            Debug.WriteLine(String.Join(", ", reflectionMethodBodyBuilder.GetCode()));
             
 
 
@@ -228,7 +232,7 @@ namespace GroboTrace
 
 
             var methodBody2 = new CecilMethodBodyBuilder(reflectionMethodBodyBuilder.GetCode(), stackSize, dynamicMethod.InitLocals, reflectionMethodBodyBuilder.GetExceptions()).GetCecilMethodBody();
-            Console.WriteLine(methodBody2);
+            Debug.WriteLine(methodBody2);
 
           
         }

@@ -8,9 +8,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-using GrEmit;
-using GrEmit.Utils;
-
 using GroboTrace.Injection;
 using GroboTrace.Mono.Cecil.Cil;
 using GroboTrace.Mono.Cecil.Metadata;
@@ -115,8 +112,10 @@ namespace GroboTrace
             methodStartedAddress = typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
             methodFinishedAddress = typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
 
+            //Console.ReadLine();
+
+            HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new[] { typeof(Type), typeof(object) }, null));
             HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new [] {typeof(Type)}, null));
-            HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new [] {typeof(Type), typeof(object)}, null));
         }
 
         public static long TemplateForTicksSignature()
@@ -341,12 +340,13 @@ namespace GroboTrace
 
             //TicksReader = (TicksReaderDelegate)Marshal.GetDelegateForFunctionPointer(ticksReaderAddress, typeof(TicksReaderDelegate));
             var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(long), Type.EmptyTypes, typeof(string), true);
-            using(var il = new GroboIL(method))
-            {
-                il.Ldc_IntPtr(ticksReaderAddress);
-                il.Calli(CallingConventions.Standard, typeof(long), Type.EmptyTypes);
-                il.Ret();
-            }
+            var il = method.GetILGenerator();
+            if(IntPtr.Size == 8)
+                il.Emit(System.Reflection.Emit.OpCodes.Ldc_I8, ticksReaderAddress.ToInt64());
+            else
+                il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4, ticksReaderAddress.ToInt32());
+            il.EmitCalli(System.Reflection.Emit.OpCodes.Calli, CallingConventions.Standard, typeof(long), Type.EmptyTypes, null);
+            il.Emit(System.Reflection.Emit.OpCodes.Ret);
             TicksReader = (Func<long>)method.CreateDelegate(typeof(Func<long>));
         }
 

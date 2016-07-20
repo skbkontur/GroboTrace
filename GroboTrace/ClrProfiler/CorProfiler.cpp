@@ -24,6 +24,7 @@ void(STDMETHODCALLTYPE *LeaveMethodAddress)(FunctionID) = &Leave;
 
 //global static singleton
 CorProfiler* corProfiler;
+RTL_CRITICAL_SECTION criticalSection;
 
 CorProfiler::CorProfiler() : refCount(0), corProfilerInfo(nullptr), callback(nullptr), init(nullptr)
 {
@@ -54,6 +55,8 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
                       /*| COR_PRF_DISABLE_INLINING*/                             ;
 
     auto hr = this->corProfilerInfo->SetEventMask(eventMask);
+
+	InitializeCriticalSection(&criticalSection);
 
     return S_OK;
 }
@@ -206,9 +209,9 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	ULONG actualAssemblyNameSize;
 	char str[1024];
 
-	sprintf(str, "JIT Compilation of the method %I64d", functionId);
+	//sprintf(str, "JIT Compilation of the method %I64d", functionId);
 
-	OutputDebugStringA(str);
+	//OutputDebugStringA(str);
 
 	/*if (FAILED(this->corProfilerInfo->GetFunctionInfo2(functionId, 0, 0, 0, 0, 0, &methodGenericParameters, 0)))
 	{
@@ -260,10 +263,6 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 		return S_OK;
 	}
 
-	sprintf(str, "JIT Compilation of the method %I64d %ls.%ls\r\n", functionId, typeNameBuffer, methodNameBuffer);
-
-	OutputDebugStringA(str);
-
 
 	if (!lstrcmpW(assemblyNameBuffer, L"GroboTrace"))
 		return S_OK;
@@ -274,59 +273,71 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	if (!lstrcmpW(assemblyNameBuffer, L"mscorlib"))
 		return S_OK;
 
+	sprintf(str, "JIT Compilation of the method %I64d %ls.%ls\r\n", functionId, typeNameBuffer, methodNameBuffer);
+
+	OutputDebugStringA(str);
+
+
 	if (!callback)
 	{
-		OutputDebugString(L"Trying to load .NET lib");
-		WCHAR fileName[1024];
-
-		auto groboTrace = GetModuleHandle(L"GroboTrace.dll");
-		if (!groboTrace)
+		OutputDebugString(L"Trying to enter critical section");
+		EnterCriticalSection(&criticalSection);
+		OutputDebugString(L"Entered to critical section");
+		if (!callback)
 		{
-			groboTrace = LoadLibrary(L"GroboTrace.dll");
-			if(groboTrace)
-				OutputDebugString(L"Load GroboTrace from victim's directory");
-			else {
-				int len = GetModuleFileName(GetModuleHandle(L"ClrProfiler.dll"), fileName, 1024);
-				for (int i = len - 1; i >= 0; --i)
-					if (fileName[i] == '\\')
-					{
-						int k = wsprintf(&fileName[i + 1], L"GroboTrace.dll");
-						fileName[i + 1 + k] = 0;
-						break;
-					}
-				OutputDebugString(fileName);
-				auto lib = LoadLibrary(fileName);
-				if (!lib)
-					OutputDebugString(L"Failed to load GroboTrace");
-				else
-					OutputDebugString(L"Successfully loaded GroboTrace");
-				groboTrace = lib;
+			OutputDebugString(L"Trying to load .NET lib");
+			WCHAR fileName[1024];
+
+			auto groboTrace = GetModuleHandle(L"GroboTrace.dll");
+			if (!groboTrace)
+			{
+				groboTrace = LoadLibrary(L"GroboTrace.dll");
+				if (groboTrace)
+					OutputDebugString(L"Load GroboTrace from victim's directory");
+				else {
+					int len = GetModuleFileName(GetModuleHandle(L"ClrProfiler.dll"), fileName, 1024);
+					for (int i = len - 1; i >= 0; --i)
+						if (fileName[i] == '\\')
+						{
+							int k = wsprintf(&fileName[i + 1], L"GroboTrace.dll");
+							fileName[i + 1 + k] = 0;
+							break;
+						}
+					OutputDebugString(fileName);
+					auto lib = LoadLibrary(fileName);
+					if (!lib)
+						OutputDebugString(L"Failed to load GroboTrace");
+					else
+						OutputDebugString(L"Successfully loaded GroboTrace");
+					groboTrace = lib;
+				}
 			}
+			else OutputDebugString(L"GroboTrace has already been loaded");
+
+			auto procAddr = GetProcAddress(groboTrace, "Init");
+			if (!procAddr)
+			{
+				OutputDebugString(L"Failed to obtain 'Init' method addr");
+				wsprintf(fileName, L"%ld", GetLastError());
+				OutputDebugString(fileName);
+			}
+			else
+				OutputDebugString(L"Successfully got 'Init' method addr");
+			init = reinterpret_cast<void(*)(void*, void*)>(procAddr);
+
+
+
+			init(static_cast<void*>(&GetTokenFromSig), static_cast<void*>(&CoTaskMemAlloc));
+			OutputDebugString(L"Successfully called 'Init' method");
+
+			procAddr = GetProcAddress(groboTrace, "Trace");
+			if (!procAddr)
+				OutputDebugString(L"Failed to obtain 'Trace' method addr");
+			else
+				OutputDebugString(L"Successfully got 'Trace' method addr");
+			callback = reinterpret_cast<SharpResponse(*)(WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
 		}
-		else OutputDebugString(L"GroboTrace has already been loaded");
-
-		auto procAddr = GetProcAddress(groboTrace, "Init");
-		if (!procAddr)
-		{
-			OutputDebugString(L"Failed to obtain 'Init' method addr");
-			wsprintf(fileName, L"%ld", GetLastError());
-			OutputDebugString(fileName);
-		}
-		else
-			OutputDebugString(L"Successfully got 'Init' method addr");
-		init = reinterpret_cast<void(*)(void*, void*)>(procAddr);
-
-		
-
-		init(static_cast<void*>(&GetTokenFromSig), static_cast<void*>(&CoTaskMemAlloc));
-		OutputDebugString(L"Successfully called 'Init' method");
-
-		procAddr = GetProcAddress(groboTrace, "Trace");
-		if (!procAddr)
-			OutputDebugString(L"Failed to obtain 'Trace' method addr");
-		else
-			OutputDebugString(L"Successfully got 'Trace' method addr");
-		callback = reinterpret_cast<SharpResponse(*)(WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
+		LeaveCriticalSection(&criticalSection);
 	}
 
 	LPCBYTE methodBody;
@@ -385,6 +396,8 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITFunctionPitched(FunctionID functionId)
 
 HRESULT STDMETHODCALLTYPE CorProfiler::JITInlining(FunctionID callerId, FunctionID calleeId, BOOL *pfShouldInline)
 {
+	return S_OK;
+
 	HRESULT hr;
 	mdToken methodDefToken;
 	mdTypeDef typeDefToken;

@@ -141,6 +141,13 @@
       <OptimizeReferences>true</OptimizeReferences>
       <ModuleDefinitionFile>.\ClrProfiler.def</ModuleDefinitionFile>
     </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+    <PostBuildEvent>
+      <Command>copy $(TargetDir)$(TargetName).dll $(SolutionDir)..\Assemblies\</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="ClassFactory.h" />
