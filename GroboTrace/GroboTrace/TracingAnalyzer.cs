@@ -1,41 +1,73 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading;
 
 namespace GroboTrace
 {
     public static class TracingAnalyzer
     {
-        public static void MethodStarted(MethodBase method, long methodHandle)
+        private static MethodCallTree[] zzz = CreateZzz();
+        private static MethodCallTree qxx = new MethodCallTree();
+
+        private static MethodCallTree[] CreateZzz()
         {
-            if(tree == null)
-                tree = new MethodCallTree();
-            tree.StartMethod(methodHandle, method);
+            var result = new MethodCallTree[100000];
+            for(int i = 0; i < result.Length; ++i)
+                result[i] = new MethodCallTree();
+            return result;
         }
 
-        public static void MethodFinished(long methodHandle, long elapsed, long profilerOverhead)
+        public static void MethodStarted(int methodId)
         {
-            tree.FinishMethod(methodHandle, elapsed);
+//            qxx.StartMethod(methodId);
+            var id = Thread.CurrentThread.ManagedThreadId;
+            if(id < zzz.Length)
+            {
+                (zzz[id]).StartMethod(methodId);
+            }
+            else throw new NotSupportedException();
+        }
+
+        public static void MethodFinished(int methodId, long elapsed)
+        {
+//            qxx.FinishMethod(methodId, elapsed);
+            var id = Thread.CurrentThread.ManagedThreadId;
+            if (id < zzz.Length)
+            {
+                (zzz[id]).FinishMethod(methodId, elapsed);
+            }
+            else throw new NotSupportedException();
+            //            tree.Value.FinishMethod(methodHandle, elapsed);
+        }
+
+        private static MethodCallTree GetTree()
+        {
+            var id = Thread.CurrentThread.ManagedThreadId;
+            if (id < zzz.Length)
+            {
+                return zzz[id];
+            }
+            throw new NotSupportedException();
         }
 
         public static Stats GetStats()
         {
             var ticks = Zzz.TicksReader();
+            var localTree = GetTree();
             return new Stats
                 {
-                    ElapsedTicks = tree == null ? 0 : ticks - tree.startTicks,
-                    Tree = tree == null ? new MethodStatsNode() : tree.GetStatsAsTree(ticks),
-                    List = tree == null ? new List<MethodStats>() : tree.GetStatsAsList(ticks)
+                    ElapsedTicks = localTree == null ? 0 : ticks - localTree.startTicks,
+                    Tree = localTree == null ? new MethodStatsNode() : localTree.GetStatsAsTree(ticks),
+                    List = localTree == null ? new List<MethodStats>() : localTree.GetStatsAsList(ticks)
                 };
         }
 
         public static void ClearStats()
         {
-            if(tree != null)
-                tree.ClearStats();
+            var localTree = GetTree();
+            if (localTree != null)
+                localTree.ClearStats();
         }
-
-        [ThreadStatic]
-        private static MethodCallTree tree;
     }
 }

@@ -8,19 +8,19 @@ namespace GroboTrace
     {
         public MethodCallTree()
         {
-            root = new MethodCallNode(null, 0, null);
+            root = new MethodCallNode(null, 0);
             current = root;
             startTicks = Zzz.TicksReader();
         }
 
-        public void StartMethod(long methodHandle, MethodBase method)
+        public void StartMethod(int methodId)
         {
-            current = current.StartMethod(methodHandle, method);
+            current = current.StartMethod(methodId);
         }
 
-        public void FinishMethod(long methodHandle, long elsapsed)
+        public void FinishMethod(int methodId, long elsapsed)
         {
-            current = current.FinishMethod(methodHandle, elsapsed);
+            current = current.FinishMethod(methodId, elsapsed);
         }
 
         public MethodStatsNode GetStatsAsTree(long endTicks)

@@ -397,7 +397,7 @@ namespace GroboTrace
                 return response;
             }
 
-            var module = assembly.GetModules().FirstOrDefault(m => m.FullyQualifiedName == moduleName);
+            var module = assembly.GetModules().FirstOrDefault(m => !m.Assembly.IsDynamic && m.FullyQualifiedName == moduleName);
             if(module == null)
             {
                 Debug.WriteLine(".NET: Unable to obtain module. Assembly = {0}, module path = {1}", assemblyName, moduleName);
@@ -415,9 +415,8 @@ namespace GroboTrace
                 return response;
             }
 
-            int i, j;
-            long functionId;
-            AddMethod(method, out i, out j, out functionId);
+            int functionId;
+            AddMethod(method, out functionId);
 
             var rawSignature = module.ResolveSignature((int)methodToken);
             var methodSignature = new MethodSignatureReader(rawSignature).Read();
@@ -454,7 +453,6 @@ namespace GroboTrace
 
             int resultLocalIndex = -1;
             int ticksLocalIndex;
-            int profilerOverheadLocalIndex;
             byte[] newSignature;
 
             if(methodSignature.HasReturnType)
@@ -468,13 +466,6 @@ namespace GroboTrace
             }
 
             ticksLocalIndex = (int)methodBody.variablesCount;
-            newSignature = new byte[methodBody.VariablesSignature.Length + 1];
-            Array.Copy(methodBody.VariablesSignature, newSignature, methodBody.VariablesSignature.Length);
-            newSignature[newSignature.Length - 1] = (byte)ElementType.I8;
-            methodBody.VariablesSignature = newSignature;
-            methodBody.variablesCount++;
-
-            profilerOverheadLocalIndex = (int)methodBody.variablesCount;
             newSignature = new byte[methodBody.VariablesSignature.Length + 1];
             Array.Copy(methodBody.VariablesSignature, newSignature, methodBody.VariablesSignature.Length);
             newSignature[newSignature.Length - 1] = (byte)ElementType.I8;
@@ -509,9 +500,6 @@ namespace GroboTrace
             var ticksReaderSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
             var ticksReaderToken = signatureTokenBuilder(moduleId, ticksReaderSignature);
 
-            var getMethodBaseSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("getMethodBase", BindingFlags.Public | BindingFlags.Static).MetadataToken);
-            var getMethodBaseToken = signatureTokenBuilder(moduleId, getMethodBaseSignature);
-
             var methodStartedSignature = typeof(TracingAnalyzer).Module.ResolveSignature(typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MetadataToken);
             var methodStartedToken = signatureTokenBuilder(moduleId, methodStartedSignature);
 
@@ -524,33 +512,20 @@ namespace GroboTrace
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken));
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex));
 
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I4, i)); // [ i ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I4, j)); // [ i, j ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)getMethodBaseFunctionAddress : (long)getMethodBaseFunctionAddress)); // [ i, j, funcAddr ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, getMethodBaseToken)); // [ ourMethod ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I8, (long)functionId)); // [ ourMethod, functionId ]
+            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I4, (int)functionId)); // [ ourMethod, functionId ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodStartedAddress : (long)methodStartedAddress)); // [ ourMethod, functionId, funcAddr ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, methodStartedToken)); // []
-
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress)); // [ funcAddr ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken)); // [ ticksNow ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Dup)); // [ ticksNow, ticksNow ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldloc, ticksLocalIndex)); // [ ticksNow, ticksNow, oldTicks ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Sub)); // [ ticksNow, profilingOverhead ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, profilerOverheadLocalIndex)); // [ ticksNow ]
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex)); // []
 
             var tryStartInstruction = methodBody.instructions[startIndex];
 
             Instruction tryEndInstruction;
             Instruction finallyStartInstruction;
 
-            methodBody.instructions.Insert(methodBody.instructions.Count, finallyStartInstruction = tryEndInstruction = Instruction.Create(OpCodes.Ldc_I8, (long)functionId)); // [ functionId ]
+            methodBody.instructions.Insert(methodBody.instructions.Count, finallyStartInstruction = tryEndInstruction = Instruction.Create(OpCodes.Ldc_I4, (int)functionId)); // [ functionId ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress)); // [ functionId, funcAddr ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Calli, ticksReaderToken)); // [ functionId, ticks ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ldloc, ticksLocalIndex)); // [ functionId, ticks, startTicks ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Sub)); // [ functionId, elapsed ]
-            methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ldloc, profilerOverheadLocalIndex)); // [ functionId, elapsed, profilerOverhead ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodFinishedAddress : (long)methodFinishedAddress)); // [ functionId, elapsed, profilerOverhead , funcAddr ]
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Calli, methodFinishedToken)); // []
 
@@ -609,7 +584,7 @@ namespace GroboTrace
             return response;
         }
 
-        public static void AddMethod(MethodBase method, out int i, out int j, out long functionId)
+        public static void AddMethod(MethodBase method, out int functionId)
         {
             var index = Interlocked.Increment(ref numberOfMethods) - 1;
             functionId = index + 1;
@@ -626,8 +601,6 @@ namespace GroboTrace
             }
 
             methods[arrayIndex][adjustedIndex] = method;
-            i = arrayIndex;
-            j = adjustedIndex;
         }
 
         private static int GetArrayIndex(int count)
@@ -706,6 +679,20 @@ namespace GroboTrace
         public static object getMethodBase(int i, int j)
         {
             return methods[i][j];
+        }
+
+        public static MethodBase GetMethod(int id)
+        {
+            if(id == 0) return null;
+
+            int index = id - 1;
+            int adjustedIndex = index;
+
+            int arrayIndex = GetArrayIndex(index + 1);
+            if (arrayIndex > 0)
+                adjustedIndex -= counts[arrayIndex - 1];
+
+            return methods[arrayIndex][adjustedIndex];
         }
 
         private static readonly Func<DynamicILInfo, MethodBase, int> memberRefTokenBuilder = EmitMemberRefTokenBuilder();

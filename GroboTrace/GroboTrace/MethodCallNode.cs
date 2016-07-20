@@ -7,37 +7,38 @@ namespace GroboTrace
 {
     internal class MethodCallNode
     {
-        public MethodCallNode(MethodCallNode parent, long handle, MethodBase method)
+        public MethodCallNode(MethodCallNode parent, int methodId)
         {
             this.parent = parent;
-            this.handle = handle;
-            Method = method;
-            handles = new long[1];
+            MethodId = methodId;
+            handles = new int[1];
             children = new MethodCallNode[1];
         }
 
-        public MethodCallNode StartMethod(long methodHandle, MethodBase method)
+        public MethodCallNode StartMethod(int methodId)
         {
-            var index = methodHandle % (uint)handles.Length;
-            if(handles[index] == methodHandle)
+            //return this;
+            var index = methodId % handles.Length;
+            if(handles[index] == methodId)
                 return children[index];
             if(handles[index] != 0)
             {
                 // rebuild table
-                index = Rebuild(methodHandle);
+                index = Rebuild(methodId);
             }
             if(handles[index] == 0)
             {
-                handles[index] = methodHandle;
-                children[index] = new MethodCallNode(this, methodHandle, method);
+                handles[index] = methodId;
+                children[index] = new MethodCallNode(this, methodId);
             }
             return children[index];
         }
 
-        public MethodCallNode FinishMethod(long methodHandle, long elapsed)
+        public MethodCallNode FinishMethod(int methodId, long elapsed)
         {
-            if(methodHandle != handle)
-                throw new InvalidOperationException();
+            //return this;
+//            if(methodId != this.MethodId)
+//                throw new InvalidOperationException();
             ++Calls;
             Ticks += elapsed;
             return parent;
@@ -49,7 +50,7 @@ namespace GroboTrace
                 {
                     MethodStats = new MethodStats
                         {
-                            Method = Method,
+                            Method = Zzz.GetMethod(MethodId),
                             Calls = Calls,
                             Ticks = Ticks,
                             Percent = totalTicks == 0 ? 0.0 : Ticks * 100.0 / totalTicks
@@ -71,7 +72,8 @@ namespace GroboTrace
                 child.GetStats(statsDict);
                 selfTicks -= child.Ticks;
             }
-            var method = Method.IsGenericMethod ? ((MethodInfo)Method).GetGenericMethodDefinition() : Method;
+            var method = Zzz.GetMethod(MethodId);
+            method = method.IsGenericMethod ? ((MethodInfo)method).GetGenericMethodDefinition() : method;
             MethodStats stats;
             if(!statsDict.TryGetValue(method, out stats))
                 statsDict.Add(method, new MethodStats {Calls = Calls, Method = method, Ticks = selfTicks});
@@ -90,22 +92,22 @@ namespace GroboTrace
                 child.ClearStats();
         }
 
-        public MethodBase Method { get; set; }
+        public int MethodId { get; set; }
         public int Calls { get; set; }
         public long Ticks { get; set; }
 
         public IEnumerable<MethodCallNode> Children { get { return children.Where(node => node != null && node.Calls > 0); } }
 
-        private uint Rebuild(long newHandle)
+        private int Rebuild(int newHandle)
         {
-            var values = new List<long>();
+            var values = new List<int>();
             for(int i = 0; i < handles.Length; ++i)
             {
                 if(handles[i] != 0)
                     values.Add(handles[i]);
             }
             values.Add(newHandle);
-            var length = (uint)handles.Length;
+            var length = handles.Length;
             while(true)
             {
                 ++length;
@@ -123,7 +125,7 @@ namespace GroboTrace
                 }
                 if(ok) break;
             }
-            var newHandles = new long[length];
+            var newHandles = new int[length];
             var newChildren = new MethodCallNode[length];
             for(int i = 0; i < handles.Length; ++i)
             {
@@ -136,12 +138,11 @@ namespace GroboTrace
             }
             handles = newHandles;
             children = newChildren;
-            return (uint)(newHandle % length);
+            return newHandle % length;
         }
 
-        private readonly long handle;
         private readonly MethodCallNode parent;
         private MethodCallNode[] children;
-        private long[] handles;
+        private int[] handles;
     }
 }
