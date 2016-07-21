@@ -53,7 +53,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 
             var exceptions = body.BakeExceptions();
 
-            body.RecalculateMaxStackSize(module);
+            //body.RecalculateMaxStackSize(module);
             
             if (RequiresFatHeader())
                 WriteFatHeader();
@@ -83,7 +83,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 
             WriteByte(flags);
             WriteByte(0x30);
-            WriteInt16((short)body.MaxStackSize);
+            WriteInt16((short)maxStack);
             WriteInt32(codeSize);
             body.LocalVarToken = GetVariablesSignature();
             WriteMetadataToken(body.LocalVarToken);
