@@ -39,6 +39,22 @@ CorProfiler::~CorProfiler()
     }
 }
 
+void DebugOutput(char* str)
+{
+#ifdef _DEBUG
+	OutputDebugStringA(str);
+#else
+#endif
+}
+
+void DebugOutput(WCHAR* str)
+{
+#ifdef _DEBUG
+	OutputDebugStringW(str);
+#else
+#endif
+}
+
 HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk)
 {
 	corProfiler = this;
@@ -176,16 +192,19 @@ void* allocateForMethodBody(ModuleID moduleId, ULONG size)
 
 mdToken GetTokenFromSig(ModuleID moduleId, char* sig, int len)
 {
-	OutputDebugStringW(L"We are in GetTokenFromSig {C++}");
+	DebugOutput(L"We are in GetTokenFromSig {C++}");
 
 	CComPtr<IMetaDataEmit> metadataEmit;
-	if(FAILED(corProfiler->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataEmit, reinterpret_cast<IUnknown **>(&metadataEmit))))
-		OutputDebugStringW(L"Failed to get metadata emit {C++}");
+	if (FAILED(corProfiler->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataEmit, reinterpret_cast<IUnknown **>(&metadataEmit))))
+	{
+		DebugOutput(L"Failed to get metadata emit {C++}");
+		return 0;
+	}
 	
 	mdSignature token;
 	metadataEmit->GetTokenFromSig(reinterpret_cast<PCCOR_SIGNATURE>(sig), len, &token);
 
-	OutputDebugStringW(L"Success: Token for sig created/found {C++}");
+	DebugOutput(L"Success: Token for sig created/found {C++}");
 	return token;
 }
 
@@ -227,39 +246,39 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 
 	if (FAILED(this->corProfilerInfo->GetFunctionInfo(functionId, &classId, &moduleId, &methodDefToken)))
 	{
-		OutputDebugStringW(L"GetFunctionInfo failed");
+		DebugOutput(L"GetFunctionInfo failed");
 		return S_OK;
 	}
 
 
 	if (FAILED(this->corProfilerInfo->GetModuleInfo(moduleId, 0, 1024, &actualModuleNameSize, moduleNameBuffer, &assemblyId)))
 	{
-		OutputDebugStringW(L"GetModuleInfo failed");
+		DebugOutput(L"GetModuleInfo failed");
 		return S_OK;
 	}
 
 	if (FAILED(this->corProfilerInfo->GetAssemblyInfo(assemblyId, 1024, &actualAssemblyNameSize, assemblyNameBuffer, 0, 0)))
 	{
-		OutputDebugStringW(L"GetAssemblyInfo failed");
+		DebugOutput(L"GetAssemblyInfo failed");
 		return S_OK;
 	}
 
 	CComPtr<IMetaDataImport> metadataImport;
 	if (FAILED(corProfiler->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataImport, reinterpret_cast<IUnknown **>(&metadataImport))))
 	{
-		OutputDebugStringW(L"Failed to get IMetadataImport {C++}");
+		DebugOutput(L"Failed to get IMetadataImport {C++}");
 		return S_OK;
 	}
 
 	if (FAILED(metadataImport->GetMethodProps(methodDefToken, &typeDefToken, methodNameBuffer, 1024, &actualMethodNameSize, 0, 0, 0, 0, 0)))
 	{
-		OutputDebugStringW(L"GetMethodProps failed");
+		DebugOutput(L"GetMethodProps failed");
 		return S_OK;
 	}
 
 	if (FAILED(metadataImport->GetTypeDefProps(typeDefToken, typeNameBuffer, 1024, &actualTypeNameSize, 0, 0)))
 	{
-		OutputDebugStringW(L"GetTypeDefProps failed");
+		DebugOutput(L"GetTypeDefProps failed");
 		return S_OK;
 	}
 
@@ -275,17 +294,17 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 
 	sprintf(str, "JIT Compilation of the method %I64d %ls.%ls\r\n", functionId, typeNameBuffer, methodNameBuffer);
 
-	OutputDebugStringA(str);
+	DebugOutput(str);
 
 
 	if (!callback)
 	{
-		OutputDebugString(L"Trying to enter critical section");
+		DebugOutput(L"Trying to enter critical section");
 		EnterCriticalSection(&criticalSection);
-		OutputDebugString(L"Entered to critical section");
+		DebugOutput(L"Entered to critical section");
 		if (!callback)
 		{
-			OutputDebugString(L"Trying to load .NET lib");
+			DebugOutput(L"Trying to load .NET lib");
 			WCHAR fileName[1024];
 
 			auto groboTrace = GetModuleHandle(L"GroboTrace.dll");
@@ -293,7 +312,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			{
 				groboTrace = LoadLibrary(L"GroboTrace.dll");
 				if (groboTrace)
-					OutputDebugString(L"Load GroboTrace from victim's directory");
+					DebugOutput(L"Load GroboTrace from victim's directory");
 				else {
 					int len = GetModuleFileName(GetModuleHandle(L"ClrProfiler.dll"), fileName, 1024);
 					for (int i = len - 1; i >= 0; --i)
@@ -303,38 +322,38 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 							fileName[i + 1 + k] = 0;
 							break;
 						}
-					OutputDebugString(fileName);
+					DebugOutput(fileName);
 					auto lib = LoadLibrary(fileName);
 					if (!lib)
-						OutputDebugString(L"Failed to load GroboTrace");
+						DebugOutput(L"Failed to load GroboTrace");
 					else
-						OutputDebugString(L"Successfully loaded GroboTrace");
+						DebugOutput(L"Successfully loaded GroboTrace");
 					groboTrace = lib;
 				}
 			}
-			else OutputDebugString(L"GroboTrace has already been loaded");
+			else DebugOutput(L"GroboTrace has already been loaded");
 
 			auto procAddr = GetProcAddress(groboTrace, "Init");
 			if (!procAddr)
 			{
-				OutputDebugString(L"Failed to obtain 'Init' method addr");
+				DebugOutput(L"Failed to obtain 'Init' method addr");
 				wsprintf(fileName, L"%ld", GetLastError());
-				OutputDebugString(fileName);
+				DebugOutput(fileName);
 			}
 			else
-				OutputDebugString(L"Successfully got 'Init' method addr");
+				DebugOutput(L"Successfully got 'Init' method addr");
 			init = reinterpret_cast<void(*)(void*, void*)>(procAddr);
 
 
 
 			init(static_cast<void*>(&GetTokenFromSig), static_cast<void*>(&CoTaskMemAlloc));
-			OutputDebugString(L"Successfully called 'Init' method");
+			DebugOutput(L"Successfully called 'Init' method");
 
 			procAddr = GetProcAddress(groboTrace, "Trace");
 			if (!procAddr)
-				OutputDebugString(L"Failed to obtain 'Trace' method addr");
+				DebugOutput(L"Failed to obtain 'Trace' method addr");
 			else
-				OutputDebugString(L"Successfully got 'Trace' method addr");
+				DebugOutput(L"Successfully got 'Trace' method addr");
 			callback = reinterpret_cast<SharpResponse(*)(WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
 		}
 		LeaveCriticalSection(&criticalSection);
@@ -363,7 +382,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 
 
 		IfFailRet(corProfilerInfo->SetILFunctionBody(moduleId, methodDefToken, sharpResponse.newMethodBody));
-		OutputDebugStringW(L"Successfully rewrote method");
+		DebugOutput(L"Successfully rewrote method");
 	}
 	
 	return S_OK;
