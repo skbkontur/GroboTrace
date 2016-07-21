@@ -4,16 +4,18 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using GroboTrace.Mono.Collections.Generic;
+
 namespace GroboTrace.Mono.Cecil.Cil
 {
     public static class MethodBodyRocks
     {
-        public static void SimplifyMacros(this MethodBody self)
+        public static void SimplifyMacros(this Collection<Instruction> instructions)
         {
-            if (self == null)
-                throw new ArgumentNullException("self");
+            if (instructions == null)
+                throw new ArgumentNullException(nameof(instructions));
 
-            foreach (var instruction in self.Instructions)
+            foreach (var instruction in instructions)
             {
                 if (instruction.OpCode.OpCodeType != OpCodeType.Macro)
                     continue;
@@ -165,14 +167,14 @@ namespace GroboTrace.Mono.Cecil.Cil
             instruction.Operand = null;
         }
 
-        public static void OptimizeMacros(this MethodBody self)
+        public static void OptimizeMacros(this Collection<Instruction> instructions)
         {
-            if (self == null)
-                throw new ArgumentNullException("self");
+            if (instructions == null)
+                throw new ArgumentNullException(nameof(instructions));
 
             //var method = self.Method;
 
-            foreach (var instruction in self.Instructions)
+            foreach (var instruction in instructions)
             {
                 int index;
                 switch (instruction.OpCode.Code)
@@ -310,20 +312,20 @@ namespace GroboTrace.Mono.Cecil.Cil
                 }
             }
 
-            OptimizeBranches(self);
+            OptimizeBranches(instructions);
         }
 
-        public static void OptimizeBranches(MethodBody body)
+        public static void OptimizeBranches(Collection<Instruction> instructions)
         {
-            ComputeOffsets(body);
+            ComputeOffsets(instructions);
 
-            foreach (var instruction in body.Instructions)
+            foreach (var instruction in instructions)
             {
                 if (instruction.OpCode.OperandType != OperandType.InlineBrTarget)
                     continue;
 
                 if (OptimizeBranch(instruction))
-                    ComputeOffsets(body);
+                    ComputeOffsets(instructions);
             }
         }
 
@@ -382,10 +384,10 @@ namespace GroboTrace.Mono.Cecil.Cil
             return true;
         }
 
-        static void ComputeOffsets(MethodBody body)
+        static void ComputeOffsets(Collection<Instruction> instructions)
         {
             var offset = 0;
-            foreach (var instruction in body.Instructions)
+            foreach (var instruction in instructions)
             {
                 instruction.Offset = offset;
                 offset += instruction.GetSize();

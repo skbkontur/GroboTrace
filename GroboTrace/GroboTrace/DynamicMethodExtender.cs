@@ -141,7 +141,7 @@ namespace GroboTrace
             int functionId;
             Zzz.AddMethod(dynamicMethod, out functionId);
 
-            Zzz.ReplaceRetInstructions(methodBody.instructions, hasReturnType, resultLocalIndex);
+            Zzz.ReplaceRetInstructions(methodBody.Instructions, hasReturnType, resultLocalIndex);
 
             var ticksReaderSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
             var ticksReaderToken = new MetadataToken((uint)dynamicIlInfo.GetTokenFor(ticksReaderSignature));
@@ -154,15 +154,15 @@ namespace GroboTrace
 
             int startIndex = 0;
 
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress));
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken));
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex));
+            methodBody.Instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress));
+            methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken));
+            methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex));
 
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I4, (int)functionId)); // [ ourMethod, functionId ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodStartedAddress : (long)methodStartedAddress)); // [ ourMethod, functionId, funcAddr ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, methodStartedToken)); // []
 
-            var tryStartInstruction = methodBody.instructions[startIndex];
+            var tryStartInstruction = methodBody.Instructions[startIndex];
 
             Instruction tryEndInstruction;
             Instruction finallyStartInstruction;
@@ -176,18 +176,18 @@ namespace GroboTrace
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Calli, methodFinishedToken)); // []
 
             Instruction endFinallyInstruction;
-            methodBody.instructions.Insert(methodBody.instructions.Count, endFinallyInstruction = Instruction.Create(OpCodes.Endfinally));
+            methodBody.Instructions.Insert(methodBody.Instructions.Count, endFinallyInstruction = Instruction.Create(OpCodes.Endfinally));
 
             Instruction finallyEndInstruction;
 
             if(resultLocalIndex >= 0)
             {
-                methodBody.instructions.Insert(methodBody.instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ldloc, resultLocalIndex));
-                methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ret));
+                methodBody.Instructions.Insert(methodBody.Instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ldloc, resultLocalIndex));
+                methodBody.Instructions.Insert(methodBody.Instructions.Count, Instruction.Create(OpCodes.Ret));
             }
             else
             {
-                methodBody.instructions.Insert(methodBody.instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ret));
+                methodBody.Instructions.Insert(methodBody.Instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ret));
             }
 
             ExceptionHandler newException = new ExceptionHandler(ExceptionHandlerType.Finally);
@@ -196,14 +196,14 @@ namespace GroboTrace
             newException.HandlerStart = finallyStartInstruction;
             newException.HandlerEnd = finallyEndInstruction;
 
-            methodBody.instructions.Insert(methodBody.instructions.IndexOf(tryEndInstruction), Instruction.Create(OpCodes.Leave, finallyEndInstruction));
+            methodBody.Instructions.Insert(methodBody.Instructions.IndexOf(tryEndInstruction), Instruction.Create(OpCodes.Leave, finallyEndInstruction));
 
             methodBody.ExceptionHandlers.Add(newException);
 
-            var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
+            //var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
 
-            Debug.WriteLine("Changed code");
-            Debug.WriteLine(String.Join(", ", reflectionMethodBodyBuilder.GetCode()));
+            //Debug.WriteLine("Changed code");
+            //Debug.WriteLine(String.Join(", ", methodBody.BakeILCode()));
 
             dynamicIlInfo.SetCode(reflectionMethodBodyBuilder.GetCode(), Math.Max(stackSize, 3));
 

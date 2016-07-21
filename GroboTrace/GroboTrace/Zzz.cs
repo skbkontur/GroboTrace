@@ -255,7 +255,7 @@ namespace GroboTrace
 
             var dynamicILInfo = dynamicMethod.GetDynamicILInfo();
 
-            foreach(var instruction in methodBody.instructions)
+            foreach(var instruction in methodBody.Instructions)
             {
                 if(!(instruction.Operand is MetadataToken))
                     continue;
@@ -274,19 +274,19 @@ namespace GroboTrace
 
             int startIndex = 0;
 
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldarg_0));
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Call, traceToken));
+            methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldarg_0));
+            methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Call, traceToken));
 
-            var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
+            //var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
 
-            dynamicILInfo.SetCode(reflectionMethodBodyBuilder.GetCode(), stackSize);
+            dynamicILInfo.SetCode(methodBody.BakeILCode(), stackSize);
 
-            if(reflectionMethodBodyBuilder.HasExceptions())
-                dynamicILInfo.SetExceptions(reflectionMethodBodyBuilder.GetExceptions());
+            if(methodBody.HasExceptionHandlers)
+                dynamicILInfo.SetExceptions(methodBody.BakeExceptions());
 
             dynamicILInfo.SetLocalSignature(localSignature);
 
-            var methodBody2 = new CecilMethodBodyBuilder(reflectionMethodBodyBuilder.GetCode(), stackSize, dynamicMethod.InitLocals, reflectionMethodBodyBuilder.GetExceptions()).GetCecilMethodBody();
+            var methodBody2 = new CecilMethodBodyBuilder(methodBody.BakeILCode(), stackSize, dynamicMethod.InitLocals, methodBody.BakeExceptions()).GetCecilMethodBody();
 
             sendToDebug("Changed", createDelegateMethod, methodBody2);
 
@@ -448,7 +448,7 @@ namespace GroboTrace
 
             List<Tuple<Instruction, int>> oldOffsets = new List<Tuple<Instruction, int>>();
 
-            foreach(var instruction in methodBody.instructions)
+            foreach(var instruction in methodBody.Instructions)
                 oldOffsets.Add(Tuple.Create(instruction, instruction.Offset));
 
             int resultLocalIndex = -1;
@@ -472,26 +472,26 @@ namespace GroboTrace
             methodBody.VariablesSignature = newSignature;
             methodBody.variablesCount++;
 
-            ReplaceRetInstructions(methodBody.instructions, resultLocalIndex >= 0, resultLocalIndex);
+            ReplaceRetInstructions(methodBody.Instructions, resultLocalIndex >= 0, resultLocalIndex);
 
             /* var dummyInstr = Instruction.Create(OpCodes.Nop);
-            methodBody.instructions.Insert(methodBody.instructions.Count, dummyInstr);
+            methodBody.Instructions.Insert(methodBody.Instructions.Count, dummyInstr);
             int index = 0;
-            while(index < methodBody.instructions.Count)
+            while(index < methodBody.Instructions.Count)
             {
-                var instruction = methodBody.instructions[index];
+                var instruction = methodBody.Instructions[index];
                 if(instruction.opcode == OpCodes.Ret)
                 {
                     // replace Ret with Nop
-                    methodBody.instructions[index].OpCode = OpCodes.Nop;
+                    methodBody.Instructions[index].OpCode = OpCodes.Nop;
                     ++index;
                     
                     if(resultLocalIndex >= 0)
                     {
-                        methodBody.instructions.Insert(index, Instruction.Create(OpCodes.Stloc, resultLocalIndex));
+                        methodBody.Instructions.Insert(index, Instruction.Create(OpCodes.Stloc, resultLocalIndex));
                         ++index;
                     }
-                    methodBody.instructions.Insert(index, Instruction.Create(OpCodes.Br, dummyInstr));
+                    methodBody.Instructions.Insert(index, Instruction.Create(OpCodes.Br, dummyInstr));
 
                 }
                 ++index;
@@ -508,15 +508,15 @@ namespace GroboTrace
 
             int startIndex = 0;
 
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress));
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken));
-            methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex));
+            methodBody.Instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress));
+            methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken));
+            methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Stloc, ticksLocalIndex));
 
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldc_I4, (int)functionId)); // [ ourMethod, functionId ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)methodStartedAddress : (long)methodStartedAddress)); // [ ourMethod, functionId, funcAddr ]
             methodBody.instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, methodStartedToken)); // []
 
-            var tryStartInstruction = methodBody.instructions[startIndex];
+            var tryStartInstruction = methodBody.Instructions[startIndex];
 
             Instruction tryEndInstruction;
             Instruction finallyStartInstruction;
@@ -530,17 +530,17 @@ namespace GroboTrace
             methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Calli, methodFinishedToken)); // []
 
             Instruction endFinallyInstruction;
-            methodBody.instructions.Insert(methodBody.instructions.Count, endFinallyInstruction = Instruction.Create(OpCodes.Endfinally));
+            methodBody.Instructions.Insert(methodBody.Instructions.Count, endFinallyInstruction = Instruction.Create(OpCodes.Endfinally));
 
             Instruction finallyEndInstruction;
 
             if(resultLocalIndex >= 0)
             {
-                methodBody.instructions.Insert(methodBody.instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ldloc, resultLocalIndex));
-                methodBody.instructions.Insert(methodBody.instructions.Count, Instruction.Create(OpCodes.Ret));
+                methodBody.Instructions.Insert(methodBody.Instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ldloc, resultLocalIndex));
+                methodBody.Instructions.Insert(methodBody.Instructions.Count, Instruction.Create(OpCodes.Ret));
             }
             else
-                methodBody.instructions.Insert(methodBody.instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ret));
+                methodBody.Instructions.Insert(methodBody.Instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ret));
 
             ExceptionHandler newException = new ExceptionHandler(ExceptionHandlerType.Finally);
             newException.TryStart = tryStartInstruction;
@@ -548,17 +548,24 @@ namespace GroboTrace
             newException.HandlerStart = finallyStartInstruction;
             newException.HandlerEnd = finallyEndInstruction;
 
-            methodBody.instructions.Insert(methodBody.instructions.IndexOf(tryEndInstruction), Instruction.Create(OpCodes.Leave, finallyEndInstruction));
+            methodBody.Instructions.Insert(methodBody.Instructions.IndexOf(tryEndInstruction), Instruction.Create(OpCodes.Leave, finallyEndInstruction));
 
             methodBody.ExceptionHandlers.Add(newException);
 
-            var codeWriter = new CodeWriter(module, sig => signatureTokenBuilder(moduleId, sig), methodBody, Math.Max(methodBody.MaxStackSize, 4));
-            codeWriter.WriteMethodBody();
+            Debug.WriteLine("Initial maxStackSize = " + methodBody.MaxStackSize);
+            Debug.WriteLine("");
+
+            var bodyBaker = new MethodBodyBaker(module, sig => signatureTokenBuilder(moduleId, sig), methodBody, Math.Max(methodBody.MaxStackSize, 4));
+
+            var bakedBytes = bodyBaker.BakeMethodBody();
 
             sendToDebug("Changed", method, methodBody);
 
-            var newMethodBody = (IntPtr)allocateForMethodBody(moduleId, (uint)codeWriter.length);
-            Marshal.Copy(codeWriter.buffer, 0, newMethodBody, codeWriter.length);
+            Debug.WriteLine("Calculated maxStackSize = " + methodBody.MaxStackSize);
+            Debug.WriteLine("");
+
+            var newMethodBody = (IntPtr)allocateForMethodBody(moduleId, (uint)bakedBytes.Length);
+            Marshal.Copy(bakedBytes, 0, newMethodBody, bakedBytes.Length);
 
             response.newMethodBody = newMethodBody;
 

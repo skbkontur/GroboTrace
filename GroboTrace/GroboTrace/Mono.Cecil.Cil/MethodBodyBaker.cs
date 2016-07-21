@@ -1,0 +1,138 @@
+//
+// Author:
+//   Jb Evain (jbevain@gmail.com)
+//
+// Copyright (c) 2008 - 2015 Jb Evain
+// Copyright (c) 2008 - 2011 Novell, Inc.
+//
+// Licensed under the MIT/X11 license.
+//
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
+
+using GroboTrace.Mono.Cecil.Metadata;
+using GroboTrace.Mono.Cecil.PE;
+using GroboTrace.Mono.Collections.Generic;
+
+using RVA = System.UInt32;
+
+namespace GroboTrace.Mono.Cecil.Cil
+{
+    internal sealed class MethodBodyBaker : ByteBuffer
+    {
+        public MethodBodyBaker(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, MethodBody body, int? maxStack)
+            : base(0)
+        {
+            this.module = module;
+            this.signatureTokenBuilder = signatureTokenBuilder;
+            this.body = body;
+            this.maxStack = maxStack;
+        }
+
+        public byte[] BakeMethodBody()
+        {
+            //body.Instructions.SimplifyMacros();
+            //body.Instructions.OptimizeMacros();
+
+            WriteMethodBody();
+
+            var temp = new byte[length];
+            Array.Copy(buffer, temp, length);
+            return temp;
+        }
+
+        private void WriteMethodBody()
+        {
+            var ilCode = body.BakeILCode();
+            codeSize = ilCode.Length;
+
+            var exceptions = body.BakeExceptions();
+
+            body.RecalculateMaxStackSize(module);
+            
+            if (RequiresFatHeader())
+                WriteFatHeader();
+            else
+                WriteByte((byte)(0x2 | (codeSize << 2))); // tiny
+
+            WriteBytes(ilCode);
+
+            //WriteInstructions();
+
+            if (body.HasExceptionHandlers)
+            {
+                Align(4);
+                WriteBytes(exceptions);
+            }
+
+            Align(4);
+        }
+
+        private void WriteFatHeader()
+        {
+            byte flags = 0x3; // fat
+            if(body.InitLocals)
+                flags |= 0x10; // init locals
+            if(body.HasExceptionHandlers)
+                flags |= 0x8; // more sections
+
+            WriteByte(flags);
+            WriteByte(0x30);
+            WriteInt16((short)body.MaxStackSize);
+            WriteInt32(codeSize);
+            body.LocalVarToken = GetVariablesSignature();
+            WriteMetadataToken(body.LocalVarToken);
+        }
+
+        private MetadataToken GetVariablesSignature()
+        {
+            if(!body.HasVariables)
+                return MetadataToken.Zero;
+            var writer = new ByteBuffer(body.VariablesSignature.Length + 1 + 4);
+            writer.position = 0;
+            writer.WriteByte(0x7);
+            writer.WriteCompressedUInt32(body.variablesCount);
+            writer.WriteBytes(body.VariablesSignature);
+            writer.position = 0;
+            var signature = writer.ReadBytes(writer.length);
+            var metadataToken = signatureTokenBuilder(signature);
+            Debug.WriteLine(".NET: got metadata token for signature : {0}", metadataToken.ToInt32());
+            return metadataToken;
+        }
+
+        
+        private bool RequiresFatHeader()
+        {
+            return codeSize >= 64
+                   || body.InitLocals
+                   || body.HasVariables
+                   || body.HasExceptionHandlers
+                   || body.MaxStackSize > 8;
+        }
+
+        
+       
+        private void WriteMetadataToken(MetadataToken token)
+        {
+            WriteUInt32(token.ToUInt32());
+        }
+
+        private void Align(int align)
+        {
+            align--;
+            WriteBytes(((position + align) & ~align) - position);
+        }
+
+        private readonly Module module;
+        private readonly Func<byte[], MetadataToken> signatureTokenBuilder;
+
+        private MethodBody body;
+        private readonly int? maxStack;
+        private int codeSize;
+    }
+}

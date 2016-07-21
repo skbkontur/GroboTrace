@@ -1,4 +1,5 @@
-﻿using System;
+﻿/*
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -26,8 +27,8 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         private void WriteResolvedMethodBody()
         {
-            body.SimplifyMacros();
-            body.OptimizeMacros();
+            body.Instructions.SimplifyMacros();
+            body.Instructions.OptimizeMacros();
             
             WriteInstructions();
 
@@ -256,7 +257,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         {
             if (instruction == null)
             {
-                var last = body.instructions[body.instructions.size - 1];
+                var last = body.Instructions[body.Instructions.size - 1];
                 return last.Offset + last.GetSize();
             }
 
@@ -297,3 +298,4 @@ namespace GroboTrace.Mono.Cecil.Cil
 
     }
 }
+*/

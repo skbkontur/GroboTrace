@@ -151,7 +151,7 @@ namespace GroboTrace.Mono.Cecil.PE {
     }
 
 
-	public class ByteBuffer {
+	class ByteBuffer {
 
 		internal byte [] buffer;
 		internal int length;

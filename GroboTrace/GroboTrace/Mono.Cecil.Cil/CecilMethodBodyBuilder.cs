@@ -15,16 +15,17 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
 
     // todo: refactor this
-    public class CecilMethodBodyBuilder : ByteBuffer
+    internal class CecilMethodBodyBuilder : ByteBuffer
     {
         private CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals)
             :base(code)
         {
             body = new MethodBody();
 
+            codeSize = code.Length;
             position = 0;
 
-            body.code_size = buffer.Length;
+            //body.code_size = buffer.Length;
             body.MaxStackSize = stackSize;
             body.InitLocals = initLocals;
 
@@ -68,8 +69,8 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         private void ReadCode()
         {
-            var end = body.code_size;
-            var instructions = body.instructions = new InstructionCollection((body.code_size + 1) / 2);
+            var end = codeSize;
+            var instructions = body.Instructions;
 
             while (position < end)
             {
@@ -346,5 +347,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         private ByteBuffer exceptionsBytes;
 
         private MethodBody body;
+
+        private int codeSize;
     }
 }

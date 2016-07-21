@@ -1,14 +1,5 @@
-//
-// Author:
-//   Jb Evain (jbevain@gmail.com)
-//
-// Copyright (c) 2008 - 2015 Jb Evain
-// Copyright (c) 2008 - 2011 Novell, Inc.
-//
-// Licensed under the MIT/X11 license.
-//
-
 using System;
+using System.Reflection;
 using System.Text;
 
 using GroboTrace.Mono.Cecil.Metadata;
@@ -18,23 +9,51 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
     public sealed class MethodBody
     {
+        public MethodBody()
+        {
+            Instructions = new InstructionCollection();
+            ExceptionHandlers = new Collection<ExceptionHandler>();
+            ilCodeBaker = new ILCodeBaker(Instructions);
+            exceptionsBaker = new ExceptionsBaker(ExceptionHandlers, Instructions);
+
+            
+            InitLocals = true;
+        }
+
         public int MaxStackSize { get; set; }
 
-        public int CodeSize { get { return code_size; } } // todo: refactor: подсчет codesiz'а
+        public void RecalculateMaxStackSize(Module module)
+        {
+            MaxStackSize = new MaxStackSizeCalculator(this, module).TryComputeMaxStack();
+        }
 
         public bool InitLocals { get; set; }
 
         public MetadataToken LocalVarToken { get; set; }
 
-        public Collection<Instruction> Instructions { get { return instructions ?? (instructions = new InstructionCollection()); } }
-
-        public bool HasExceptionHandlers { get { return !exceptions.IsNullOrEmpty(); } }
-
-        public Collection<ExceptionHandler> ExceptionHandlers { get { return exceptions ?? (exceptions = new Collection<ExceptionHandler>()); } }
+        public bool HasExceptionHandlers { get { return !ExceptionHandlers.IsNullOrEmpty(); } }
 
         public bool HasVariables { get { return variablesCount > 0; } }
 
+
+        // todo: использовать SignatureHelper 
         public byte[] VariablesSignature { get { return variablesSignature ?? (variablesSignature = new byte[0]); } set { variablesSignature = value; } }
+
+        public byte[] BakeILCode()
+        {
+            return ilCodeBaker.BakeILCode();
+        }
+
+        public byte[] BakeExceptions()
+        {
+            return exceptionsBaker.BakeExceptions();
+        }
+
+        public byte[] BakeFullMethodBody(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, int? maxStack)
+        {
+            return new MethodBodyBaker(module,signatureTokenBuilder, this, maxStack).BakeMethodBody();
+        }
+
 
         public ILProcessor GetILProcessor()
         {
@@ -63,14 +82,17 @@ namespace GroboTrace.Mono.Cecil.Cil
         }
 
         //internal int max_stack_size;
-        internal int code_size;
+        //internal int code_size;
         //internal bool init_locals;
         //internal MetadataToken local_var_token;
 
         public bool isTiny;
 
-        internal Collection<Instruction> instructions;
-        internal Collection<ExceptionHandler> exceptions;
+        private readonly ILCodeBaker ilCodeBaker;
+        private readonly ExceptionsBaker exceptionsBaker;
+
+        public readonly Collection<Instruction> Instructions;
+        public readonly Collection<ExceptionHandler> ExceptionHandlers;
         private byte[] variablesSignature;
         internal uint variablesCount;
     }

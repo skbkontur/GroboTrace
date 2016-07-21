@@ -45,7 +45,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             {
             case 0x2: // tiny
                 body.isTiny = true;
-                body.code_size = flags >> 2;
+                codeSize = flags >> 2;
                 body.MaxStackSize = 8;
                 ReadCode();
                 break;
@@ -62,7 +62,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         {
             var flags = ReadUInt16();
             body.MaxStackSize = ReadUInt16();
-            body.code_size = (int)ReadUInt32();
+            codeSize = (int)ReadUInt32();
             body.LocalVarToken = new MetadataToken(ReadUInt32());
             body.InitLocals = (flags & 0x10) != 0;
 
@@ -97,13 +97,13 @@ namespace GroboTrace.Mono.Cecil.Cil
         private void ReadCode()
         {
             start = position;
-            var code_size = body.code_size;
+            var code_size = codeSize;
 
             if(code_size < 0 /* || buffer.Length <= (uint) (code_size + position)*/)
                 code_size = 0;
 
             var end = start + code_size;
-            var instructions = body.instructions = new InstructionCollection((code_size + 1) / 2);
+            var instructions = body.Instructions;
 
             while(position < end)
             {
@@ -327,5 +327,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         private int start;
 
         private MethodBody body;
+
+        private int codeSize;
     }
 }
