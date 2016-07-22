@@ -203,14 +203,15 @@ namespace GroboTrace
             //var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
 
             //Debug.WriteLine("Changed code");
-            //Debug.WriteLine(String.Join(", ", methodBody.BakeILCode()));
+            //Debug.WriteLine(String.Join(", ", methodBody.GetILAsByteArray()));
 
 
+            methodBody.Prepare();
 
-            dynamicIlInfo.SetCode(methodBody.BakeILCode(), Math.Max(stackSize, 3));
+            dynamicIlInfo.SetCode(methodBody.GetILAsByteArray(), Math.Max(stackSize, 3));
 
             if(methodBody.HasExceptionHandlers)
-                dynamicIlInfo.SetExceptions(methodBody.BakeExceptions());
+                dynamicIlInfo.SetExceptions(methodBody.GetExceptionsAsByteArray());
 
             dynamicIlInfo.SetLocalSignature(localSignature);
 

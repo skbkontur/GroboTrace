@@ -20,8 +20,8 @@ namespace GroboTrace.Mono.Cecil.Cil
             if (handlers.IsNullOrEmpty())
                 return Empty<byte>.Array;
 
-            instructions.SimplifyMacros();
-            instructions.OptimizeMacros();
+            //instructions.SimplifyMacros();
+            //instructions.OptimizeMacros();
 
             WriteExceptions();
 

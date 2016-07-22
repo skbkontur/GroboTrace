@@ -16,8 +16,8 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         public byte[] BakeILCode()
         {
-            instructions.SimplifyMacros();
-            instructions.OptimizeMacros();
+            //instructions.SimplifyMacros();
+            //instructions.OptimizeMacros();
 
             WriteInstructions();
 

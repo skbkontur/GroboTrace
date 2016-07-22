@@ -26,7 +26,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             position = 0;
 
             //body.code_size = buffer.Length;
-            body.MaxStackSize = stackSize;
+            body.TemporaryMaxStack = stackSize;
             body.InitLocals = initLocals;
 
             ReadCode();

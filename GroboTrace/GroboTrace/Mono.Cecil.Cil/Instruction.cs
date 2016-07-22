@@ -7,6 +7,8 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
     public sealed class Instruction
     {
+
+
         internal Instruction(int offset, OpCode opCode)
         {
             Offset = offset;

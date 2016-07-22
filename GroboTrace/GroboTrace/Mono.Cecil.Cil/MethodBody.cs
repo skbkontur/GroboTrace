@@ -13,18 +13,15 @@ namespace GroboTrace.Mono.Cecil.Cil
         {
             Instructions = new InstructionCollection();
             ExceptionHandlers = new Collection<ExceptionHandler>();
-            ilCodeBaker = new ILCodeBaker(Instructions);
-            exceptionsBaker = new ExceptionsBaker(ExceptionHandlers, Instructions);
 
-            
             InitLocals = true;
         }
 
-        public int MaxStackSize { get; set; }
+        public int TemporaryMaxStack { get; set; }
 
-        public void RecalculateMaxStackSize(Module module)
+        public void TryCalculateMaxStackSize(Module module)
         {
-            MaxStackSize = new MaxStackSizeCalculator(this, module).TryComputeMaxStack();
+            TemporaryMaxStack = new MaxStackSizeCalculator(this, module).TryComputeMaxStack();
         }
 
         public bool InitLocals { get; set; }
@@ -35,23 +32,40 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         public bool HasVariables { get { return variablesCount > 0; } }
 
-
         // todo: использовать SignatureHelper 
         public byte[] VariablesSignature { get { return variablesSignature ?? (variablesSignature = new byte[0]); } set { variablesSignature = value; } }
 
-        public byte[] BakeILCode()
+        public void Prepare()
         {
-            return ilCodeBaker.BakeILCode();
+            Instructions.SimplifyMacros();
+            Instructions.OptimizeMacros();
+
+            isPrepared = true;
         }
 
-        public byte[] BakeExceptions()
+        
+        public byte[] GetILAsByteArray()
         {
-            return exceptionsBaker.BakeExceptions();
+            if (!isPrepared)
+                throw new NotSupportedException("MethodBody has not been prepared");
+
+            return new ILCodeBaker(Instructions).BakeILCode();
         }
 
-        public byte[] BakeFullMethodBody(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, int? maxStack)
+        public byte[] GetExceptionsAsByteArray()
         {
-            return new MethodBodyBaker(module,signatureTokenBuilder, this, maxStack).BakeMethodBody();
+            if (!isPrepared)
+                throw new NotSupportedException("MethodBody has not been prepared");
+
+            return new ExceptionsBaker(ExceptionHandlers, Instructions).BakeExceptions();
+        }
+
+        public byte[] GetFullMethodBody(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, int maxStackSize)
+        {
+            if (!isPrepared)
+                throw new NotSupportedException("MethodBody has not been prepared");
+
+            return new MethodBodyBaker(module, signatureTokenBuilder, this, maxStackSize).BakeMethodBody();
         }
 
 
@@ -88,9 +102,9 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         public bool isTiny;
 
-        private readonly ILCodeBaker ilCodeBaker;
-        private readonly ExceptionsBaker exceptionsBaker;
+        private bool isPrepared;
 
+ 
         public readonly Collection<Instruction> Instructions;
         public readonly Collection<ExceptionHandler> ExceptionHandlers;
         private byte[] variablesSignature;

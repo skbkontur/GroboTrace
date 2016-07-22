@@ -25,7 +25,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
     internal sealed class MethodBodyBaker : ByteBuffer
     {
-        public MethodBodyBaker(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, MethodBody body, int? maxStack)
+        public MethodBodyBaker(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, MethodBody body, int maxStack)
             : base(0)
         {
             this.module = module;
@@ -48,12 +48,12 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         private void WriteMethodBody()
         {
-            var ilCode = body.BakeILCode();
+            var ilCode = body.GetILAsByteArray();
             codeSize = ilCode.Length;
 
-            var exceptions = body.BakeExceptions();
+            var exceptions = body.GetExceptionsAsByteArray();
 
-            //body.RecalculateMaxStackSize(module);
+            //body.TryCalculateMaxStackSize(module);
             
             if (RequiresFatHeader())
                 WriteFatHeader();
@@ -112,7 +112,7 @@ namespace GroboTrace.Mono.Cecil.Cil
                    || body.InitLocals
                    || body.HasVariables
                    || body.HasExceptionHandlers
-                   || body.MaxStackSize > 8;
+                   || body.TemporaryMaxStack > 8;
         }
 
         
@@ -132,7 +132,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         private readonly Func<byte[], MetadataToken> signatureTokenBuilder;
 
         private MethodBody body;
-        private readonly int? maxStack;
+        private readonly int maxStack;
         private int codeSize;
     }
 }

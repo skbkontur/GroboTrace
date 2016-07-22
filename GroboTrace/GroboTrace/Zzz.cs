@@ -279,14 +279,16 @@ namespace GroboTrace
 
             //var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
 
-            dynamicILInfo.SetCode(methodBody.BakeILCode(), stackSize);
+            methodBody.Prepare();
+
+            dynamicILInfo.SetCode(methodBody.GetILAsByteArray(), stackSize);
 
             if(methodBody.HasExceptionHandlers)
-                dynamicILInfo.SetExceptions(methodBody.BakeExceptions());
+                dynamicILInfo.SetExceptions(methodBody.GetExceptionsAsByteArray());
 
             dynamicILInfo.SetLocalSignature(localSignature);
 
-            var methodBody2 = new CecilMethodBodyBuilder(methodBody.BakeILCode(), stackSize, dynamicMethod.InitLocals, methodBody.BakeExceptions()).GetCecilMethodBody();
+            var methodBody2 = new CecilMethodBodyBuilder(methodBody.GetILAsByteArray(), stackSize, dynamicMethod.InitLocals, methodBody.GetExceptionsAsByteArray()).GetCecilMethodBody();
 
             sendToDebug("Changed", createDelegateMethod, methodBody2);
 
@@ -552,20 +554,20 @@ namespace GroboTrace
 
             methodBody.ExceptionHandlers.Add(newException);
 
-            Debug.WriteLine("Initial maxStackSize = " + methodBody.MaxStackSize);
+            Debug.WriteLine("Initial maxStackSize = " + methodBody.TemporaryMaxStack);
             Debug.WriteLine("");
 
-            var bodyBaker = new MethodBodyBaker(module, sig => signatureTokenBuilder(moduleId, sig), methodBody, Math.Max(methodBody.MaxStackSize, 4));
-
-            var bakedBytes = bodyBaker.BakeMethodBody();
+            methodBody.Prepare();
+          
+            var methodBytes = methodBody.GetFullMethodBody(module, sig => signatureTokenBuilder(moduleId, sig), Math.Max(methodBody.TemporaryMaxStack, 4));
 
             sendToDebug("Changed", method, methodBody);
 
-            Debug.WriteLine("Calculated maxStackSize = " + methodBody.MaxStackSize);
+            Debug.WriteLine("Calculated maxStackSize = " + methodBody.TemporaryMaxStack);
             Debug.WriteLine("");
 
-            var newMethodBody = (IntPtr)allocateForMethodBody(moduleId, (uint)bakedBytes.Length);
-            Marshal.Copy(bakedBytes, 0, newMethodBody, bakedBytes.Length);
+            var newMethodBody = (IntPtr)allocateForMethodBody(moduleId, (uint)methodBytes.Length);
+            Marshal.Copy(methodBytes, 0, newMethodBody, methodBytes.Length);
 
             response.newMethodBody = newMethodBody;
 

@@ -46,7 +46,7 @@ namespace GroboTrace.Mono.Cecil.Cil
             case 0x2: // tiny
                 body.isTiny = true;
                 codeSize = flags >> 2;
-                body.MaxStackSize = 8;
+                body.TemporaryMaxStack = 8;
                 ReadCode();
                 break;
             case 0x3: // fat
@@ -61,7 +61,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         private void ReadFatMethod()
         {
             var flags = ReadUInt16();
-            body.MaxStackSize = ReadUInt16();
+            body.TemporaryMaxStack = ReadUInt16();
             codeSize = (int)ReadUInt32();
             body.LocalVarToken = new MetadataToken(ReadUInt32());
             body.InitLocals = (flags & 0x10) != 0;
