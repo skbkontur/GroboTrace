@@ -74,8 +74,9 @@
     <Compile Include="MethodStatsNode.cs" />
     <Compile Include="Mono.Cecil.Cil\ExceptionsBaker.cs" />
     <Compile Include="Mono.Cecil.Cil\ILCodeBaker.cs" />
+    <Compile Include="Mono.Cecil.Cil\LocalInfo.cs" />
+    <Compile Include="Mono.Cecil.Cil\LocalVarSigBuilder.cs" />
     <Compile Include="Mono.Cecil.Cil\MaxStackSizeCalculator.cs" />
-    <Compile Include="Mono.Cecil.Cil\ReflectionMethodBodyBuilder.cs" />
     <Compile Include="Mono.Cecil.Cil\Code.cs" />
     <Compile Include="Mono.Cecil.Cil\CodeReader.cs" />
     <Compile Include="Mono.Cecil.Cil\MethodBodyBaker.cs" />

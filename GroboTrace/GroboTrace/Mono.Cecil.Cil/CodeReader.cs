@@ -29,7 +29,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         public MethodBody ReadMethodBody()
         {
-            body = new MethodBody(module);
+            body = new MethodBody();
 
             ReadMethodBodyInternal();
 
@@ -78,20 +78,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         public void ReadVariables(MetadataToken local_var_token)
         {
             var signature = module.ResolveSignature(local_var_token.ToInt32());
-            var reader = new ByteBuffer(signature);
-
-            const byte local_sig = 0x7;
-
-            if(reader.ReadByte() != local_sig)
-                throw new NotSupportedException();
-
-            var count = reader.ReadCompressedUInt32();
-            body.variablesCount = count;
-            if(count == 0)
-                return;
-
-            body.VariablesSignature = new byte[signature.Length - reader.position];
-            Array.Copy(signature, reader.position, body.VariablesSignature, 0, body.VariablesSignature.Length);
+            body.SetLocalSignature(signature);
         }
 
         private void ReadCode()

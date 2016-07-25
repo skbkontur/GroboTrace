@@ -91,15 +91,9 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         private MetadataToken GetVariablesSignature()
         {
-            if(!body.HasVariables)
+            if (body.LocalVariablesCount() == 0)
                 return MetadataToken.Zero;
-            var writer = new ByteBuffer(body.VariablesSignature.Length + 1 + 4);
-            writer.position = 0;
-            writer.WriteByte(0x7);
-            writer.WriteCompressedUInt32(body.variablesCount);
-            writer.WriteBytes(body.VariablesSignature);
-            writer.position = 0;
-            var signature = writer.ReadBytes(writer.length);
+            var signature = body.GetLocalSignature();
             var metadataToken = signatureTokenBuilder(signature);
             Debug.WriteLine(".NET: got metadata token for signature : {0}", metadataToken.ToInt32());
             return metadataToken;
@@ -110,7 +104,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         {
             return codeSize >= 64
                    || body.InitLocals
-                   || body.HasVariables
+                   || body.LocalVariablesCount() > 0
                    || body.HasExceptionHandlers
                    || body.TemporaryMaxStack > 8;
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 
@@ -9,14 +10,10 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
     public sealed class MethodBody
     {
-        public MethodBody(Module module)
+        public MethodBody()
         {
-            if (module == null)
-                throw new ArgumentNullException(nameof(module));
-
             Instructions = new InstructionCollection();
             ExceptionHandlers = new Collection<ExceptionHandler>();
-            Module = module;
             InitLocals = true;
         }
 
@@ -32,11 +29,39 @@ namespace GroboTrace.Mono.Cecil.Cil
         public MetadataToken LocalVarToken { get; set; }
 
         public bool HasExceptionHandlers { get { return !ExceptionHandlers.IsNullOrEmpty(); } }
+        
+        public void SetLocalSignature(byte[] localSignature)
+        {
+            localVarSigBuilder = new LocalVarSigBuilder(localSignature);
+        }
 
-        public bool HasVariables { get { return variablesCount > 0; } }
+        public LocalInfo AddLocalVariable(byte[] signature)
+        {
+            if (localVarSigBuilder == null)
+                localVarSigBuilder = new LocalVarSigBuilder();
+            return localVarSigBuilder.AddLocalVariable(signature);
+        }
 
-        // todo: использовать SignatureHelper 
-        public byte[] VariablesSignature { get { return variablesSignature ?? (variablesSignature = new byte[0]); } set { variablesSignature = value; } }
+        public LocalInfo AddLocalVariable(Type localType, bool isPinned = false)
+        {
+            if (localVarSigBuilder == null)
+                localVarSigBuilder = new LocalVarSigBuilder();
+            return localVarSigBuilder.AddLocalVariable(localType, isPinned);
+        }
+
+        public byte[] GetLocalSignature()
+        {
+            if (localVarSigBuilder == null)
+                localVarSigBuilder = new LocalVarSigBuilder();
+            return localVarSigBuilder.GetSignature();
+        }
+
+        public int LocalVariablesCount()
+        {
+            if (localVarSigBuilder == null)
+                localVarSigBuilder = new LocalVarSigBuilder();
+            return localVarSigBuilder.Count;
+        }
 
         public void Prepare()
         {
@@ -62,6 +87,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 
             return new ExceptionsBaker(ExceptionHandlers, Instructions).BakeExceptions();
         }
+
 
         public byte[] GetFullMethodBody(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, int maxStackSize)
         {
@@ -98,20 +124,14 @@ namespace GroboTrace.Mono.Cecil.Cil
             return result.ToString();
         }
 
-        //internal int max_stack_size;
-        //internal int code_size;
-        //internal bool init_locals;
-        //internal MetadataToken local_var_token;
-
         public bool isTiny;
-
         private bool isPrepared;
 
-        public readonly Module Module;
         public readonly Collection<Instruction> Instructions;
         public readonly Collection<ExceptionHandler> ExceptionHandlers;
-        private byte[] variablesSignature;
-        internal uint variablesCount;
+        
+        private LocalVarSigBuilder localVarSigBuilder;
+        
     }
 
     internal class InstructionCollection : Collection<Instruction>

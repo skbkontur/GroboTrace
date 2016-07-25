@@ -17,10 +17,10 @@ namespace GroboTrace.Mono.Cecil.Cil
     // todo: refactor this
     internal class CecilMethodBodyBuilder : ByteBuffer
     {
-        private CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, Module module)
+        private CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, byte[] localSignature)
             :base(code)
         {
-            body = new MethodBody(module);
+            body = new MethodBody();
 
             codeSize = code.Length;
             position = 0;
@@ -28,19 +28,21 @@ namespace GroboTrace.Mono.Cecil.Cil
             body.TemporaryMaxStack = stackSize;
             body.InitLocals = initLocals;
 
+            body.SetLocalSignature(localSignature);
+
             ReadCode();
         }
 
 
-        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, Module module, CORINFO_EH_CLAUSE[] exceptionClauses)
-            :this(code, stackSize, initLocals, module)
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, byte[] localSignature, CORINFO_EH_CLAUSE[] exceptionClauses)
+            : this(code, stackSize, initLocals, localSignature)
         {
             ReadExceptions(exceptionClauses);
         }
 
 
-        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, Module module, byte[] exceptions)
-            : this(code, stackSize, initLocals, module)
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, byte[] localSignature, byte[] exceptions)
+            : this(code, stackSize, initLocals, localSignature)
         {
 
             exceptionsBytes = new ByteBuffer(exceptions);
@@ -50,8 +52,8 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         }
 
-        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, Module module, IList<ExceptionHandlingClause> exceptionClauses)
-            : this(code, stackSize, initLocals, module)
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, byte[] localSignature, IList<ExceptionHandlingClause> exceptionClauses)
+            : this(code, stackSize, initLocals, localSignature)
         {
             ReadExceptions(exceptionClauses);
         }

@@ -249,7 +249,7 @@ namespace GroboTrace
                                      ? createDelegateMethod.Module.ResolveSignature(oldMethodBody.LocalSignatureMetadataToken)
                                      : SignatureHelper.GetLocalVarSigHelper().GetSignature();
 
-            var methodBody = new CecilMethodBodyBuilder(code, stackSize, initLocals, createDelegateMethod.Module, exceptionClauses).GetCecilMethodBody();
+            var methodBody = new CecilMethodBodyBuilder(code, stackSize, initLocals, localSignature, exceptionClauses).GetCecilMethodBody();
 
             sendToDebug("Plain", createDelegateMethod, methodBody);
 
@@ -288,7 +288,7 @@ namespace GroboTrace
 
             dynamicILInfo.SetLocalSignature(localSignature);
 
-            var methodBody2 = new CecilMethodBodyBuilder(methodBody.GetILAsByteArray(), stackSize, dynamicMethod.InitLocals, createDelegateMethod.Module, methodBody.GetExceptionsAsByteArray()).GetCecilMethodBody();
+            var methodBody2 = new CecilMethodBodyBuilder(methodBody.GetILAsByteArray(), stackSize, dynamicMethod.InitLocals, localSignature, methodBody.GetExceptionsAsByteArray()).GetCecilMethodBody();
 
             sendToDebug("Changed", createDelegateMethod, methodBody2);
 
@@ -459,45 +459,14 @@ namespace GroboTrace
 
             if(methodSignature.HasReturnType)
             {
-                resultLocalIndex = (int)methodBody.variablesCount;
-                newSignature = new byte[methodBody.VariablesSignature.Length + methodSignature.ReturnTypeSignature.Length];
-                Array.Copy(methodBody.VariablesSignature, newSignature, methodBody.VariablesSignature.Length);
-                Array.Copy(methodSignature.ReturnTypeSignature, 0, newSignature, methodBody.VariablesSignature.Length, methodSignature.ReturnTypeSignature.Length);
-                methodBody.VariablesSignature = newSignature;
-                methodBody.variablesCount++;
+                resultLocalIndex = methodBody.AddLocalVariable(methodSignature.ReturnTypeSignature).LocalIndex;
             }
 
-            ticksLocalIndex = (int)methodBody.variablesCount;
-            newSignature = new byte[methodBody.VariablesSignature.Length + 1];
-            Array.Copy(methodBody.VariablesSignature, newSignature, methodBody.VariablesSignature.Length);
-            newSignature[newSignature.Length - 1] = (byte)ElementType.I8;
-            methodBody.VariablesSignature = newSignature;
-            methodBody.variablesCount++;
+            ticksLocalIndex = methodBody.AddLocalVariable(typeof(long)).LocalIndex;
 
+            
             ReplaceRetInstructions(methodBody.Instructions, resultLocalIndex >= 0, resultLocalIndex);
-
-            /* var dummyInstr = Instruction.Create(OpCodes.Nop);
-            methodBody.Instructions.Insert(methodBody.Instructions.Count, dummyInstr);
-            int index = 0;
-            while(index < methodBody.Instructions.Count)
-            {
-                var instruction = methodBody.Instructions[index];
-                if(instruction.opcode == OpCodes.Ret)
-                {
-                    // replace Ret with Nop
-                    methodBody.Instructions[index].OpCode = OpCodes.Nop;
-                    ++index;
-                    
-                    if(resultLocalIndex >= 0)
-                    {
-                        methodBody.Instructions.Insert(index, Instruction.Create(OpCodes.Stloc, resultLocalIndex));
-                        ++index;
-                    }
-                    methodBody.Instructions.Insert(index, Instruction.Create(OpCodes.Br, dummyInstr));
-
-                }
-                ++index;
-            }*/
+            
 
             var ticksReaderSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
             var ticksReaderToken = signatureTokenBuilder(moduleId, ticksReaderSignature);
