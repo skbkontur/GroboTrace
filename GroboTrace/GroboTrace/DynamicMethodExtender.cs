@@ -5,11 +5,14 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
 
+using GroboTrace.Mono;
 using GroboTrace.Mono.Cecil.Cil;
 using GroboTrace.Mono.Cecil.Metadata;
+using GroboTrace.Mono.Cecil.PE;
 
 using CecilMethodBody = GroboTrace.Mono.Cecil.Cil.MethodBody;
 using ExceptionHandler = GroboTrace.Mono.Cecil.Cil.ExceptionHandler;
@@ -36,27 +39,192 @@ namespace GroboTrace
             new DynamicMethodExtender(dynamicMethod).Extend();
         }
 
-
         private DynamicMethodExtender(DynamicMethod dynamicMethod)
         {
             this.dynamicMethod = dynamicMethod;
             hasReturnType = dynamicMethod.ReturnType != typeof(void);
 
             mscorlib = typeof(DynamicMethod).Assembly;
-            t_dynamicResolver = mscorlib.GetType("System.Reflection.Emit.DynamicResolver");
-            t_dynamicILGenerator = mscorlib.GetType("System.Reflection.Emit.DynamicILGenerator");
-            t_dynamicMethod = mscorlib.GetType("System.Reflection.Emit.DynamicMethod");
+            t_DynamicResolver = mscorlib.GetType("System.Reflection.Emit.DynamicResolver");
+            t_DynamicILInfo = mscorlib.GetType("System.Reflection.Emit.DynamicILInfo");
+            t_DynamicILGenerator = mscorlib.GetType("System.Reflection.Emit.DynamicILGenerator");
+            t_DynamicMethod = mscorlib.GetType("System.Reflection.Emit.DynamicMethod");
+            t_DynamicScope = mscorlib.GetType("System.Reflection.Emit.DynamicScope");
 
             ticksReaderAddress = Zzz.ticksReaderAddress;
-            getMethodBaseFunctionAddress = Zzz.getMethodBaseFunctionAddress;
             methodStartedAddress = Zzz.methodStartedAddress;
             methodFinishedAddress = Zzz.methodFinishedAddress;
         }
 
-
-        private unsafe CORINFO_EH_CLAUSE[] getExceptions(object dynamicResolver, int excCount)
+        private void Extend()
         {
-            var getEHInfo = t_dynamicResolver.GetMethod("GetEHInfo", BindingFlags.Instance | BindingFlags.NonPublic);
+            var dynamicILInfo = t_DynamicMethod.GetField("m_DynamicILInfo", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicMethod);
+            var ilGenerator = t_DynamicMethod.GetField("m_ilGenerator", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicMethod);
+
+            if (dynamicILInfo != null)
+            {
+                ExtendFromDynamicILInfo((DynamicILInfo)dynamicILInfo);
+            }
+            else if (ilGenerator != null)
+            {
+                ExtendFromILGenerator((ILGenerator)ilGenerator);
+            }
+        }
+
+        private void ExtendFromDynamicILInfo(DynamicILInfo oldDynamicILInfo)
+        {
+            var dynamicResolver = t_DynamicResolver
+                    .GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { t_DynamicILInfo }, null)
+                    .Invoke(new object[] { oldDynamicILInfo });
+
+            byte[] code;
+            int stackSize;
+            int initLocals;
+            int EHCount;
+
+            GetCodeInfo(dynamicResolver, out code, out stackSize, out initLocals, out EHCount);
+
+            var exceptions = GetDynamicILInfoExceptions(dynamicResolver);
+            var methodBody = new CecilMethodBodyBuilder(code, stackSize, dynamicMethod.InitLocals, exceptions).GetCecilMethodBody();
+
+            UnbindDynamicResolver(dynamicResolver);
+
+            Debug.WriteLine("");
+            Debug.WriteLine("Initial methodBody of DynamicMethod");
+            Debug.WriteLine(methodBody);
+
+            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
+
+            //     if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
+            //     {
+            //         Debug.WriteLine(dynamicMethod + " too simple to be traced");
+            //         return;
+            //     }
+
+            byte[] localSignature;
+
+            AddLocalVariables(oldDynamicILInfo, out localSignature);
+
+            var scope = t_DynamicILInfo.GetField("m_scope", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(oldDynamicILInfo);
+
+            DynamicILInfo newDynamicIlInfo = (DynamicILInfo)t_DynamicMethod
+                                                             .GetMethod("GetDynamicILInfo", BindingFlags.Instance | BindingFlags.NonPublic)
+                                                             .Invoke(dynamicMethod, new[] { scope });
+            
+            int functionId;
+            Zzz.AddMethod(dynamicMethod, out functionId);
+
+            ModifyMethodBody(methodBody, newDynamicIlInfo, functionId);
+
+
+            methodBody.Prepare();
+
+            newDynamicIlInfo.SetCode(methodBody.GetILAsByteArray(), Math.Max(stackSize, 3));
+
+            if (methodBody.HasExceptionHandlers)
+                newDynamicIlInfo.SetExceptions(methodBody.GetExceptionsAsByteArray());
+
+            newDynamicIlInfo.SetLocalSignature(localSignature);
+
+            Debug.WriteLine("");
+            Debug.WriteLine("Changed methodBody of DynamicMethod");
+            Debug.WriteLine(methodBody);
+
+        }
+
+
+        private void ExtendFromILGenerator(ILGenerator ilGenerator)
+        {
+            var dynamicResolver = t_DynamicResolver
+                    .GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { t_DynamicILGenerator }, null)
+                    .Invoke(new object[] { ilGenerator });
+
+            byte[] code;
+            int stackSize;
+            int initLocals;
+            int EHCount;
+
+            GetCodeInfo(dynamicResolver, out code, out stackSize, out initLocals, out EHCount);
+
+            var exceptions = GetILGeneratorExceptions(dynamicResolver, EHCount);
+            var methodBody = new CecilMethodBodyBuilder(code, stackSize, dynamicMethod.InitLocals, exceptions).GetCecilMethodBody();
+
+            UnbindDynamicResolver(dynamicResolver);
+
+            Debug.WriteLine("");
+            Debug.WriteLine("Initial methodBody of DynamicMethod");
+            Debug.WriteLine(methodBody);
+
+            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
+
+            //     if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
+            //     {
+            //         Debug.WriteLine(dynamicMethod + " too simple to be traced");
+            //         t_DynamicResolver.GetField("m_method", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(dynamicResolver, null);
+            //         typeof(DynamicMethod).GetField("m_resolver", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(dynamicMethod, null);
+            //
+            //         return;
+            //     }
+
+            byte[] localSignature;
+
+            AddLocalVariables(ilGenerator, out localSignature);
+
+            var scope = t_DynamicILGenerator.GetField("m_scope", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(ilGenerator);
+
+            DynamicILInfo newDynamicILInfo = (DynamicILInfo)t_DynamicMethod
+                                                             .GetMethod("GetDynamicILInfo", BindingFlags.Instance | BindingFlags.NonPublic)
+                                                             .Invoke(dynamicMethod, new[] { scope });
+
+            int functionId;
+            Zzz.AddMethod(dynamicMethod, out functionId);
+
+            ModifyMethodBody(methodBody, newDynamicILInfo, functionId);
+
+
+            methodBody.Prepare();
+
+            newDynamicILInfo.SetCode(methodBody.GetILAsByteArray(), Math.Max(stackSize, 3));
+
+            if (methodBody.HasExceptionHandlers)
+                newDynamicILInfo.SetExceptions(methodBody.GetExceptionsAsByteArray());
+
+            newDynamicILInfo.SetLocalSignature(localSignature);
+
+            Debug.WriteLine("");
+            Debug.WriteLine("Changed methodBody of DynamicMethod");
+            Debug.WriteLine(methodBody);
+        }
+
+
+        private void GetCodeInfo(object dynamicResolver, out byte[] code, out int stackSize, out int initLocals, out int EHCount)
+        {
+            var getCodeInfo = t_DynamicResolver.GetMethod("GetCodeInfo", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            stackSize = 0;
+            initLocals = 0;
+            EHCount = 0;
+
+            var parameters = new object[] { stackSize, initLocals, EHCount };
+
+            code = (byte[])getCodeInfo.Invoke(dynamicResolver, parameters);
+
+            stackSize = (int)parameters[0];
+            initLocals = (int)parameters[1];
+            EHCount = (int)parameters[2];
+        }
+
+        private byte[] GetDynamicILInfoExceptions(object dynamicResolver)
+        {
+            var getRawEHInfo = t_DynamicResolver.GetMethod("GetRawEHInfo", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            return (byte[])getRawEHInfo.Invoke(dynamicResolver, Empty<object>.Array);
+        }
+        
+
+        private unsafe CORINFO_EH_CLAUSE[] GetILGeneratorExceptions(object dynamicResolver, int excCount)
+        {
+            var getEHInfo = t_DynamicResolver.GetMethod("GetEHInfo", BindingFlags.Instance | BindingFlags.NonPublic);
 
             var exceptions = new CORINFO_EH_CLAUSE[excCount];
             
@@ -70,87 +238,105 @@ namespace GroboTrace
         }
 
 
-
-
-        private void Extend()
+        private void UnbindDynamicResolver(object dynamicResolver)
         {
-            var ilGenerator = dynamicMethod.GetILGenerator();
-
-            var dynamicResolver = t_dynamicResolver
-                .GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null, new[] {t_dynamicILGenerator}, null)
-                .Invoke(new object[] {ilGenerator});
-
-            var getCodeInfo = t_dynamicResolver.GetMethod("GetCodeInfo", BindingFlags.Instance | BindingFlags.NonPublic);
-
-//            return;
-
-            byte[] code;
-            int stackSize = 0;
-            int initLocals = 0;
-            int EHCount = 0;
-
-            var parameters = new object[] {stackSize, initLocals, EHCount};
-
-            code = (byte[])getCodeInfo.Invoke(dynamicResolver, parameters);
-
-            if(code == null)
-                Debug.WriteLine("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-
-            Debug.WriteLine("Initial code");
-            Debug.WriteLine(String.Join(", ", code));
-
-            stackSize = (int)parameters[0];
-            initLocals = (int)parameters[1];
-            EHCount = (int)parameters[2];
-
-            var exceptions = getExceptions(dynamicResolver, EHCount);
-
-            CecilMethodBody methodBody = new CecilMethodBodyBuilder(code, stackSize, dynamicMethod.InitLocals, exceptions).GetCecilMethodBody();
-
-            Debug.WriteLine(methodBody);
-
-            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
-
-//            if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
-//            {
-//                Debug.WriteLine(dynamicMethod + " too simple to be traced");
-//                t_dynamicResolver.GetField("m_method", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(dynamicResolver, null);
-//                typeof(DynamicMethod).GetField("m_resolver", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(dynamicMethod, null);
-//
-//                return;
-//            }
-
-            addLocalVariables();
-
-            t_dynamicResolver.GetField("m_method", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(dynamicResolver, null);
+            t_DynamicResolver.GetField("m_method", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(dynamicResolver, null);
             typeof(DynamicMethod).GetField("m_resolver", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(dynamicMethod, null);
+        }
 
-            dynamicResolver = t_dynamicResolver
-                .GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null, new[] {t_dynamicILGenerator}, null)
-                .Invoke(new object[] {ilGenerator});
 
-            var localSignature = (byte[])t_dynamicResolver.GetField("m_localSignature", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicResolver);
 
-            t_dynamicResolver.GetField("m_method", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(dynamicResolver, null);
-            typeof(DynamicMethod).GetField("m_resolver", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(dynamicMethod, null);
+        private void AddLocalVariables(DynamicILInfo dynamicILInfo, out byte[] localSignature)
+        {
+            var methodSignatureToken = (int)t_DynamicILInfo.GetField("m_methodSignature", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicILInfo);
 
-            var scope = t_dynamicILGenerator.GetField("m_scope", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(ilGenerator);
-            DynamicILInfo dynamicIlInfo = (DynamicILInfo)t_dynamicMethod
-                                                             .GetMethod("GetDynamicILInfo", BindingFlags.Instance | BindingFlags.NonPublic)
-                                                             .Invoke(dynamicMethod, new[] {scope});
-            int functionId;
-            Zzz.AddMethod(dynamicMethod, out functionId);
+            var m_scope = t_DynamicILInfo.GetField("m_scope", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicILInfo);
 
+            var rawSignature = (byte[])t_DynamicScope
+                    .GetProperty("Item", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(m_scope, new object[] { methodSignatureToken });
+
+            var methodSignature = new MethodSignatureReader(rawSignature).Read();
+
+            var oldLocalSignature = (byte[])t_DynamicILInfo
+                    .GetField("m_localSignature", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(dynamicILInfo);
+
+            var reader = new ByteBuffer(oldLocalSignature);
+
+            const byte local_sig = 0x7;
+
+            if (reader.ReadByte() != local_sig)
+                throw new NotSupportedException();
+
+            var count = reader.ReadCompressedUInt32();
+            
+            var variables = new byte[oldLocalSignature.Length - reader.position];
+            Array.Copy(oldLocalSignature, reader.position, variables, 0, variables.Length);
+
+            byte[] newSignature;
+            
+            if (hasReturnType)
+            {
+                resultLocalIndex = (int)count;
+                newSignature = new byte[variables.Length + methodSignature.ReturnTypeSignature.Length];
+                Array.Copy(variables, newSignature, variables.Length);
+                Array.Copy(methodSignature.ReturnTypeSignature, 0, newSignature, variables.Length, methodSignature.ReturnTypeSignature.Length);
+                variables = newSignature;
+                count++;
+            }
+
+            ticksLocalIndex = (int)count;
+            newSignature = new byte[variables.Length + 1];
+            Array.Copy(variables, newSignature, variables.Length);
+            newSignature[newSignature.Length - 1] = (byte)ElementType.I8;
+            variables = newSignature;
+            count++;
+
+            var writer = new ByteBuffer(variables.Length + 1 + 4);
+            writer.position = 0;
+            writer.WriteByte(0x7);
+            writer.WriteCompressedUInt32(count);
+            writer.WriteBytes(variables);
+            writer.position = 0;
+            localSignature = writer.ReadBytes(writer.length);
+
+            dynamicILInfo.SetLocalSignature(localSignature);
+        }
+
+
+        private void AddLocalVariables(ILGenerator ilGenerator, out byte[] localSignature)
+        {
+            if (hasReturnType)
+            {
+                resultLocalIndex = ilGenerator.DeclareLocal(dynamicMethod.ReturnType).LocalIndex;
+            }
+
+            ticksLocalIndex = ilGenerator.DeclareLocal(typeof(long)).LocalIndex;
+
+            var dynamicResolver = t_DynamicResolver
+                    .GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { t_DynamicILGenerator }, null)
+                    .Invoke(new object[] { ilGenerator });
+
+            localSignature = (byte[])t_DynamicResolver
+                    .GetField("m_localSignature", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(dynamicResolver);
+
+            UnbindDynamicResolver(dynamicResolver);
+        }
+
+        private void ModifyMethodBody(CecilMethodBody methodBody, DynamicILInfo newDynamicILInfo, int functionId)
+        {
             Zzz.ReplaceRetInstructions(methodBody.Instructions, hasReturnType, resultLocalIndex);
 
             var ticksReaderSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
-            var ticksReaderToken = new MetadataToken((uint)dynamicIlInfo.GetTokenFor(ticksReaderSignature));
+            var ticksReaderToken = new MetadataToken((uint)newDynamicILInfo.GetTokenFor(ticksReaderSignature));
 
             var methodStartedSignature = typeof(TracingAnalyzer).Module.ResolveSignature(typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MetadataToken);
-            var methodStartedToken = new MetadataToken((uint)dynamicIlInfo.GetTokenFor(methodStartedSignature));
+            var methodStartedToken = new MetadataToken((uint)newDynamicILInfo.GetTokenFor(methodStartedSignature));
 
             var methodFinishedSignature = typeof(TracingAnalyzer).Module.ResolveSignature(typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MetadataToken);
-            var methodFinishedToken = new MetadataToken((uint)dynamicIlInfo.GetTokenFor(methodFinishedSignature));
+            var methodFinishedToken = new MetadataToken((uint)newDynamicILInfo.GetTokenFor(methodFinishedSignature));
 
             int startIndex = 0;
 
@@ -180,7 +366,7 @@ namespace GroboTrace
 
             Instruction finallyEndInstruction;
 
-            if(resultLocalIndex >= 0)
+            if (resultLocalIndex >= 0)
             {
                 methodBody.Instructions.Insert(methodBody.Instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ldloc, resultLocalIndex));
                 methodBody.Instructions.Insert(methodBody.Instructions.Count, Instruction.Create(OpCodes.Ret));
@@ -199,52 +385,21 @@ namespace GroboTrace
             methodBody.Instructions.Insert(methodBody.Instructions.IndexOf(tryEndInstruction), Instruction.Create(OpCodes.Leave, finallyEndInstruction));
 
             methodBody.ExceptionHandlers.Add(newException);
-
-            //var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
-
-            //Debug.WriteLine("Changed code");
-            //Debug.WriteLine(String.Join(", ", methodBody.GetILAsByteArray()));
-
-
-            methodBody.Prepare();
-
-            dynamicIlInfo.SetCode(methodBody.GetILAsByteArray(), Math.Max(stackSize, 3));
-
-            if(methodBody.HasExceptionHandlers)
-                dynamicIlInfo.SetExceptions(methodBody.GetExceptionsAsByteArray());
-
-            dynamicIlInfo.SetLocalSignature(localSignature);
-
-//            var methodBody2 = new CecilMethodBodyBuilder(reflectionMethodBodyBuilder.GetCode(), stackSize, dynamicMethod.InitLocals, reflectionMethodBodyBuilder.GetExceptions()).GetCecilMethodBody();
-//            Debug.WriteLine(methodBody2);
         }
-
-        private void addLocalVariables()
-        {
-            var ilGenerator = dynamicMethod.GetILGenerator();
-
-            if (hasReturnType)
-            {
-                resultLocalIndex = ilGenerator.DeclareLocal(dynamicMethod.ReturnType).LocalIndex;
-            }
-
-            ticksLocalIndex = ilGenerator.DeclareLocal(typeof(long)).LocalIndex;
-        }
-
-
         
-
 
         private DynamicMethod dynamicMethod;
         private bool hasReturnType;
 
         private Assembly mscorlib;
-        private Type t_dynamicResolver;
-        private Type t_dynamicILGenerator;
-        private Type t_dynamicMethod;
+        private readonly Type t_DynamicResolver;
+        private readonly Type t_DynamicILInfo;
+        private readonly Type t_DynamicILGenerator;
+        private readonly Type t_DynamicMethod;
+        private readonly Type t_DynamicScope;
+
 
         private static IntPtr ticksReaderAddress;
-        private static IntPtr getMethodBaseFunctionAddress;
         private static IntPtr methodStartedAddress;
         private static IntPtr methodFinishedAddress;
 
