@@ -29,7 +29,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         public MethodBody ReadMethodBody()
         {
-            body = new MethodBody();
+            body = new MethodBody(module);
 
             ReadMethodBodyInternal();
 

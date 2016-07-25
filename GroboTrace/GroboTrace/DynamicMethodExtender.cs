@@ -85,7 +85,7 @@ namespace GroboTrace
             GetCodeInfo(dynamicResolver, out code, out stackSize, out initLocals, out EHCount);
 
             var exceptions = GetDynamicILInfoExceptions(dynamicResolver);
-            var methodBody = new CecilMethodBodyBuilder(code, stackSize, dynamicMethod.InitLocals, exceptions).GetCecilMethodBody();
+            var methodBody = new CecilMethodBodyBuilder(code, stackSize, dynamicMethod.InitLocals, dynamicMethod.Module, exceptions).GetCecilMethodBody();
 
             UnbindDynamicResolver(dynamicResolver);
 
@@ -147,7 +147,7 @@ namespace GroboTrace
             GetCodeInfo(dynamicResolver, out code, out stackSize, out initLocals, out EHCount);
 
             var exceptions = GetILGeneratorExceptions(dynamicResolver, EHCount);
-            var methodBody = new CecilMethodBodyBuilder(code, stackSize, dynamicMethod.InitLocals, exceptions).GetCecilMethodBody();
+            var methodBody = new CecilMethodBodyBuilder(code, stackSize, dynamicMethod.InitLocals, dynamicMethod.Module, exceptions).GetCecilMethodBody();
 
             UnbindDynamicResolver(dynamicResolver);
 

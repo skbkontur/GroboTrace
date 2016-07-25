@@ -9,11 +9,14 @@ namespace GroboTrace.Mono.Cecil.Cil
 {
     public sealed class MethodBody
     {
-        public MethodBody()
+        public MethodBody(Module module)
         {
+            if (module == null)
+                throw new ArgumentNullException(nameof(module));
+
             Instructions = new InstructionCollection();
             ExceptionHandlers = new Collection<ExceptionHandler>();
-
+            Module = module;
             InitLocals = true;
         }
 
@@ -104,7 +107,7 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         private bool isPrepared;
 
- 
+        public readonly Module Module;
         public readonly Collection<Instruction> Instructions;
         public readonly Collection<ExceptionHandler> ExceptionHandlers;
         private byte[] variablesSignature;

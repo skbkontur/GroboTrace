@@ -249,7 +249,7 @@ namespace GroboTrace
                                      ? createDelegateMethod.Module.ResolveSignature(oldMethodBody.LocalSignatureMetadataToken)
                                      : SignatureHelper.GetLocalVarSigHelper().GetSignature();
 
-            var methodBody = new CecilMethodBodyBuilder(code, stackSize, initLocals, exceptionClauses).GetCecilMethodBody();
+            var methodBody = new CecilMethodBodyBuilder(code, stackSize, initLocals, createDelegateMethod.Module, exceptionClauses).GetCecilMethodBody();
 
             sendToDebug("Plain", createDelegateMethod, methodBody);
 
@@ -288,7 +288,7 @@ namespace GroboTrace
 
             dynamicILInfo.SetLocalSignature(localSignature);
 
-            var methodBody2 = new CecilMethodBodyBuilder(methodBody.GetILAsByteArray(), stackSize, dynamicMethod.InitLocals, methodBody.GetExceptionsAsByteArray()).GetCecilMethodBody();
+            var methodBody2 = new CecilMethodBodyBuilder(methodBody.GetILAsByteArray(), stackSize, dynamicMethod.InitLocals, createDelegateMethod.Module, methodBody.GetExceptionsAsByteArray()).GetCecilMethodBody();
 
             sendToDebug("Changed", createDelegateMethod, methodBody2);
 

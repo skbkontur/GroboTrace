@@ -17,10 +17,10 @@ namespace GroboTrace.Mono.Cecil.Cil
     // todo: refactor this
     internal class CecilMethodBodyBuilder : ByteBuffer
     {
-        private CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals)
+        private CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, Module module)
             :base(code)
         {
-            body = new MethodBody();
+            body = new MethodBody(module);
 
             codeSize = code.Length;
             position = 0;
@@ -32,15 +32,15 @@ namespace GroboTrace.Mono.Cecil.Cil
         }
 
 
-        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, CORINFO_EH_CLAUSE[] exceptionClauses)
-            :this(code, stackSize, initLocals)
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, Module module, CORINFO_EH_CLAUSE[] exceptionClauses)
+            :this(code, stackSize, initLocals, module)
         {
             ReadExceptions(exceptionClauses);
         }
 
 
-        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, byte[] exceptions)
-            : this(code, stackSize, initLocals)
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, Module module, byte[] exceptions)
+            : this(code, stackSize, initLocals, module)
         {
 
             exceptionsBytes = new ByteBuffer(exceptions);
@@ -50,8 +50,8 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         }
 
-        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, IList<ExceptionHandlingClause> exceptionClauses)
-            : this(code, stackSize, initLocals)
+        public CecilMethodBodyBuilder(byte[] code, int stackSize, bool initLocals, Module module, IList<ExceptionHandlingClause> exceptionClauses)
+            : this(code, stackSize, initLocals, module)
         {
             ReadExceptions(exceptionClauses);
         }
