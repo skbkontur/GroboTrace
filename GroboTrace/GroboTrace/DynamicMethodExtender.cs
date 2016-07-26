@@ -106,14 +106,8 @@ namespace GroboTrace
             //         return;
             //     }
 
-            if (hasReturnType)
-            {
-                resultLocalIndex = methodBody.AddLocalVariable(dynamicMethod.ReturnType).LocalIndex;
-            }
-
-            ticksLocalIndex = methodBody.AddLocalVariable(typeof(long)).LocalIndex;
-
-
+            AddLocalVariables(methodBody, oldDynamicILInfo);
+            
             var scope = t_DynamicILInfo.GetField("m_scope", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(oldDynamicILInfo);
 
             DynamicILInfo newDynamicIlInfo = (DynamicILInfo)t_DynamicMethod
@@ -126,7 +120,7 @@ namespace GroboTrace
             ModifyMethodBody(methodBody, newDynamicIlInfo, functionId);
 
 
-            methodBody.Prepare();
+            methodBody.Seal();
 
             newDynamicIlInfo.SetCode(methodBody.GetILAsByteArray(), Math.Max(stackSize, 3));
 
@@ -180,12 +174,7 @@ namespace GroboTrace
             //         return;
             //     }
 
-            if (hasReturnType)
-            {
-                resultLocalIndex = methodBody.AddLocalVariable(dynamicMethod.ReturnType).LocalIndex;
-            }
-
-            ticksLocalIndex = methodBody.AddLocalVariable(typeof(long)).LocalIndex;
+            AddLocalVariables(methodBody, ilGenerator);
 
             var scope = t_DynamicILGenerator.GetField("m_scope", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(ilGenerator);
 
@@ -199,7 +188,7 @@ namespace GroboTrace
             ModifyMethodBody(methodBody, newDynamicILInfo, functionId);
 
 
-            methodBody.Prepare();
+            methodBody.Seal();
 
             newDynamicILInfo.SetCode(methodBody.GetILAsByteArray(), Math.Max(stackSize, 3));
 
@@ -261,6 +250,55 @@ namespace GroboTrace
             typeof(DynamicMethod).GetField("m_resolver", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(dynamicMethod, null);
         }
 
+        private void AddLocalVariables(CecilMethodBody methodBody, DynamicILInfo dynamicILInfo)
+        {
+            var methodSignatureToken = (int)t_DynamicILInfo.GetField("m_methodSignature", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicILInfo);
+
+            var m_scope = t_DynamicILInfo.GetField("m_scope", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicILInfo);
+
+            var rawSignature = (byte[])t_DynamicScope
+                    .GetProperty("Item", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(m_scope, new object[] { methodSignatureToken });
+
+            var methodSignature = new MethodSignatureReader(rawSignature).Read();
+            
+            if (hasReturnType)
+            {
+                resultLocalIndex = methodBody.AddLocalVariable(methodSignature.ReturnTypeSignature).LocalIndex;
+            }
+
+            ticksLocalIndex = methodBody.AddLocalVariable(typeof(long)).LocalIndex;
+        }
+
+        //private void AddLocalVariables(CecilMethodBody methodBody, ILGenerator ilGenerator)
+        //{
+
+
+
+        //    var methodSignatureToken = (int)t_DynamicILGenerator.GetField("m_methodSigToken", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(ilGenerator);
+
+        //    var m_scope = t_DynamicILGenerator.GetField("m_scope", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(ilGenerator);
+
+        //    var rawSignature = (byte[])t_DynamicScope
+        //            .GetProperty("Item", BindingFlags.Instance | BindingFlags.NonPublic)
+        //            .GetValue(m_scope, new object[] { methodSignatureToken });
+
+        //    var methodSignature = new MethodSignatureReader(rawSignature).Read();
+
+        //    if (hasReturnType)
+        //    {
+        //        resultLocalIndex = methodBody.AddLocalVariable(methodSignature.ReturnTypeSignature).LocalIndex;
+        //    }
+
+        //    ticksLocalIndex = methodBody.AddLocalVariable(typeof(long)).LocalIndex;
+        //}
+
+
+
+
+
+
+
 
 
         //private void AddLocalVariables(DynamicILInfo dynamicILInfo, out byte[] localSignature)
@@ -287,12 +325,12 @@ namespace GroboTrace
         //        throw new NotSupportedException();
 
         //    var count = reader.ReadCompressedUInt32();
-            
+
         //    var variables = new byte[oldLocalSignature.Length - reader.position];
         //    Array.Copy(oldLocalSignature, reader.position, variables, 0, variables.Length);
 
         //    byte[] newSignature;
-            
+
         //    if (hasReturnType)
         //    {
         //        resultLocalIndex = (int)count;
@@ -322,25 +360,27 @@ namespace GroboTrace
         //}
 
 
-        //private void AddLocalVariables(ILGenerator ilGenerator, out byte[] localSignature)
-        //{
-        //    if (hasReturnType)
-        //    {
-        //        resultLocalIndex = ilGenerator.DeclareLocal(dynamicMethod.ReturnType).LocalIndex;
-        //    }
+        private void AddLocalVariables(CecilMethodBody methodBody, ILGenerator ilGenerator)
+        {
+            if (hasReturnType)
+            {
+                resultLocalIndex = ilGenerator.DeclareLocal(dynamicMethod.ReturnType).LocalIndex;
+            }
 
-        //    ticksLocalIndex = ilGenerator.DeclareLocal(typeof(long)).LocalIndex;
+            ticksLocalIndex = ilGenerator.DeclareLocal(typeof(long)).LocalIndex;
 
-        //    var dynamicResolver = t_DynamicResolver
-        //            .GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { t_DynamicILGenerator }, null)
-        //            .Invoke(new object[] { ilGenerator });
+            var dynamicResolver = t_DynamicResolver
+                    .GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { t_DynamicILGenerator }, null)
+                    .Invoke(new object[] { ilGenerator });
 
-        //    localSignature = (byte[])t_DynamicResolver
-        //            .GetField("m_localSignature", BindingFlags.Instance | BindingFlags.NonPublic)
-        //            .GetValue(dynamicResolver);
+            var newLocalSignature = (byte[])t_DynamicResolver
+                    .GetField("m_localSignature", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(dynamicResolver);
 
-        //    UnbindDynamicResolver(dynamicResolver);
-        //}
+            UnbindDynamicResolver(dynamicResolver);
+
+            methodBody.SetLocalSignature(newLocalSignature);
+        }
 
         private void ModifyMethodBody(CecilMethodBody methodBody, DynamicILInfo newDynamicILInfo, int functionId)
         {

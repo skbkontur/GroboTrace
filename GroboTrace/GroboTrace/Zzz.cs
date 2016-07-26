@@ -279,7 +279,7 @@ namespace GroboTrace
 
             //var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
 
-            methodBody.Prepare();
+            methodBody.Seal();
 
             dynamicILInfo.SetCode(methodBody.GetILAsByteArray(), stackSize);
 
@@ -526,7 +526,7 @@ namespace GroboTrace
             Debug.WriteLine("Initial maxStackSize = " + methodBody.TemporaryMaxStack);
             Debug.WriteLine("");
 
-            methodBody.Prepare();
+            methodBody.Seal();
           
             var methodBytes = methodBody.GetFullMethodBody(module, sig => signatureTokenBuilder(moduleId, sig), Math.Max(methodBody.TemporaryMaxStack, 4));
 

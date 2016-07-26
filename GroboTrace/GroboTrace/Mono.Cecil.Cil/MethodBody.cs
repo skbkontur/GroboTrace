@@ -63,27 +63,27 @@ namespace GroboTrace.Mono.Cecil.Cil
             return localVarSigBuilder.Count;
         }
 
-        public void Prepare()
+        public void Seal()
         {
             Instructions.SimplifyMacros();
             Instructions.OptimizeMacros();
 
-            isPrepared = true;
+            isSealed = true;
         }
 
         
         public byte[] GetILAsByteArray()
         {
-            if (!isPrepared)
-                throw new NotSupportedException("MethodBody has not been prepared");
+            if (!isSealed)
+                throw new NotSupportedException("MethodBody has not been sealed");
 
             return new ILCodeBaker(Instructions).BakeILCode();
         }
 
         public byte[] GetExceptionsAsByteArray()
         {
-            if (!isPrepared)
-                throw new NotSupportedException("MethodBody has not been prepared");
+            if (!isSealed)
+                throw new NotSupportedException("MethodBody has not been sealed");
 
             return new ExceptionsBaker(ExceptionHandlers, Instructions).BakeExceptions();
         }
@@ -91,8 +91,8 @@ namespace GroboTrace.Mono.Cecil.Cil
 
         public byte[] GetFullMethodBody(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, int maxStackSize)
         {
-            if (!isPrepared)
-                throw new NotSupportedException("MethodBody has not been prepared");
+            if (!isSealed)
+                throw new NotSupportedException("MethodBody has not been sealed");
 
             return new MethodBodyBaker(module, signatureTokenBuilder, this, maxStackSize).BakeMethodBody();
         }
@@ -125,7 +125,7 @@ namespace GroboTrace.Mono.Cecil.Cil
         }
 
         public bool isTiny;
-        private bool isPrepared;
+        private bool isSealed;
 
         public readonly Collection<Instruction> Instructions;
         public readonly Collection<ExceptionHandler> ExceptionHandlers;
