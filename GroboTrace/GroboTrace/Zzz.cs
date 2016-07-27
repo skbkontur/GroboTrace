@@ -421,7 +421,7 @@ namespace GroboTrace
             AddMethod(method, out functionId);
 
             var rawSignature = module.ResolveSignature((int)methodToken);
-            var methodSignature = new MethodSignatureReader(rawSignature).Read();
+            var methodSignature = new SignatureReader(rawSignature).ReadAndParseMethodSignature();
 
             Debug.WriteLine(".NET: method's signature is: " + Convert.ToBase64String(rawSignature));
             Debug.WriteLine(".NET: method has {0} parameters", methodSignature.ParamCount);

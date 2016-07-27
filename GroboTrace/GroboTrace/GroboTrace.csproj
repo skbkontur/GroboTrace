@@ -74,7 +74,9 @@
     <Compile Include="MethodStatsNode.cs" />
     <Compile Include="Mono.Cecil.Cil\ExceptionsBaker.cs" />
     <Compile Include="Mono.Cecil.Cil\ILCodeBaker.cs" />
+    <Compile Include="Mono.Cecil.Cil\InstructionCollection.cs" />
     <Compile Include="Mono.Cecil.Cil\LocalInfo.cs" />
+    <Compile Include="Mono.Cecil.Cil\LocalInfoCollection.cs" />
     <Compile Include="Mono.Cecil.Cil\LocalVarSigBuilder.cs" />
     <Compile Include="Mono.Cecil.Cil\MaxStackSizeCalculator.cs" />
     <Compile Include="Mono.Cecil.Cil\Code.cs" />
@@ -86,10 +88,10 @@
     <Compile Include="Mono.Cecil.Cil\Instruction.cs" />
     <Compile Include="Mono.Cecil.Cil\MethodBody.cs" />
     <Compile Include="Mono.Cecil.Cil\MethodBodyRocs.cs" />
-    <Compile Include="Mono.Cecil.Cil\MethodSignatureReader.cs" />
     <Compile Include="Mono.Cecil.Cil\OpCode.cs" />
     <Compile Include="Mono.Cecil.Cil\OpCodes.cs" />
     <Compile Include="Mono.Cecil.Cil\CecilMethodBodyBuilder.cs" />
+    <Compile Include="Mono.Cecil.Cil\SignatureReader.cs" />
     <Compile Include="Mono.Cecil.Metadata\ElementType.cs" />
     <Compile Include="Mono.Cecil.Metadata\MetadataToken.cs" />
     <Compile Include="Mono.Cecil.Metadata\TokenType.cs" />

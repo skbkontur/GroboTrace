@@ -11,58 +11,41 @@ namespace GroboTrace.Mono.Cecil.Cil
     {
         public LocalVarSigBuilder()
         {
-            newLocals = new List<LocalInfo>();
-            relicLocals = new byte[0];
-            relicCount = 0;
-        }
-
-        public LocalVarSigBuilder(byte[] oldLocalSignature)
-        {      
-            var reader = new ByteBuffer(oldLocalSignature);
-
-            const byte local_sig = 0x7;
-
-            if (reader.ReadByte() != local_sig)
-                throw new NotSupportedException();
-
-            relicCount = (int)reader.ReadCompressedUInt32();
-
-            relicLocals = new byte[oldLocalSignature.Length - reader.position];
-            Array.Copy(oldLocalSignature, reader.position, relicLocals, 0, relicLocals.Length);
-
-            newLocals = new List<LocalInfo>();
+            localVariables = new LocalInfoCollection();
         }
         
+        public LocalVarSigBuilder(byte[] oldLocalSignature)
+        {      
+            localVariables = new SignatureReader(oldLocalSignature).ReadLocalVarSig();
+        }
 
         public LocalInfo AddLocalVariable(byte[] signature)
         {
-            var localInfo = new LocalInfo(Count, signature);
-            newLocals.Add(localInfo);
+            var localInfo = new LocalInfo(signature);
+            localVariables.Add(localInfo);
             return localInfo;
         }
 
         public LocalInfo AddLocalVariable(Type localType, bool isPinned = false)
         {
-            var localInfo = new LocalInfo(Count, localType, isPinned);
-            newLocals.Add(localInfo);
+            var localInfo = new LocalInfo(localType, isPinned);
+            localVariables.Add(localInfo);
             return localInfo;
         }
 
         public byte[] GetSignature()
         {
-            var writer = new ByteBuffer { position = 0 };
+            var writer = new ByteBuffer();
             writer.WriteByte(0x7);
             writer.WriteCompressedUInt32((uint)Count);
-            writer.WriteBytes(relicLocals);
-            
-            foreach (var localInfo in newLocals)
+
+            foreach (var localInfo in localVariables)
             {
                 writer.WriteBytes(localInfo.Signature ?? BakeLocal(localInfo));
             }
 
             writer.position = 0;
-            var result = writer.ReadBytes(writer.length);
-            return result;
+            return writer.ReadBytes(writer.length);
         }
 
         private byte[] BakeLocal(LocalInfo localInfo)
@@ -82,13 +65,8 @@ namespace GroboTrace.Mono.Cecil.Cil
             return result;
         }
 
-        private List<LocalInfo> newLocals;
-        private byte[] relicLocals;
-        private int relicCount;
+        private readonly LocalInfoCollection localVariables;
 
-        public int Count
-        {
-            get { return relicCount + newLocals.Count; }
-        }
+        public int Count => localVariables.Count;
     }
 }

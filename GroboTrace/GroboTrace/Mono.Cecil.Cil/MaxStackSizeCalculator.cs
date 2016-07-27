@@ -139,7 +139,7 @@ namespace GroboTrace.Mono.Cecil.Cil
                         if (instruction.OpCode.Code == Code.Calli)
                         {
                             var signature = module.ResolveSignature(token.ToInt32());
-                            var parsedSignature = new MethodSignatureReader(signature).Read();
+                            var parsedSignature = new SignatureReader(signature).ReadAndParseMethodSignature();
                             hasThis = parsedSignature.HasThis && !parsedSignature.ExplicitThis;
                             parametersCount = parsedSignature.ParamCount;
                             hasReturnType = parsedSignature.HasReturnType;
@@ -147,9 +147,7 @@ namespace GroboTrace.Mono.Cecil.Cil
                         else
                         {
                             // todo generic methods
-
-
-
+                            
                             Debug.WriteLine("token type: " + token.TokenType);
                             var methodBase = module.ResolveMethod(token.ToInt32());
                             Debug.WriteLine("got methodBase " + methodBase);
