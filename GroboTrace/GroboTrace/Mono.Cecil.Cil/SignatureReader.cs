@@ -202,9 +202,13 @@ namespace GroboTrace.Mono.Cecil.Cil
                 case ElementType.GenericInst:
                     {
                         // attrs
-                        writer.WriteByte(ReadByte());
+                        var readByte = ReadByte();
+                        writer.WriteByte(readByte);
                         // element_type
-                        writer.WriteBytes(ReadTypeTokenSignature());
+                        if ((ElementType)readByte == ElementType.Internal)
+                            writer.WriteBytes(ReadBytes(IntPtr.Size));
+                        else
+                            writer.WriteBytes(ReadTypeTokenSignature());
 
                         writer.WriteBytes(ReadGenericInstanceSignature());
                         break;

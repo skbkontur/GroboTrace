@@ -64,13 +64,15 @@ namespace GroboTrace.Mono.Cecil.Cil
 
             //WriteInstructions();
 
+            //WriteBytes(4);
+
             if (body.HasExceptionHandlers)
             {
                 Align(4);
                 WriteBytes(exceptions);
             }
 
-            Align(4);
+//            Align(4);
         }
 
         private void WriteFatHeader()
@@ -95,7 +97,7 @@ namespace GroboTrace.Mono.Cecil.Cil
                 return MetadataToken.Zero;
             var signature = body.GetLocalSignature();
             var metadataToken = signatureTokenBuilder(signature);
-            Debug.WriteLine(".NET: got metadata token for signature : {0}", metadataToken.ToInt32());
+            //Debug.WriteLine(".NET: got metadata token for signature : {0}", metadataToken.ToInt32());
             return metadataToken;
         }
 
