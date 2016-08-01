@@ -56,17 +56,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DynamicMethodExtender.cs" />
-    <Compile Include="Exceptions\InaccessibleInterfaceException.cs" />
-    <Compile Include="Exceptions\InaccessibleTypeException.cs" />
     <Compile Include="IClassWrapper.cs" />
-    <Compile Include="Injection\AbstractInstruction.cs" />
-    <Compile Include="Injection\BeginCatchInstruction.cs" />
-    <Compile Include="Injection\BeginExceptionInstruction.cs" />
-    <Compile Include="Injection\BeginFinallyInstruction.cs" />
-    <Compile Include="Injection\EndExceptionInstruction.cs" />
     <Compile Include="Injection\FrameworkVersions.cs" />
-    <Compile Include="Injection\ILBytesReader.cs" />
-    <Compile Include="Injection\ILInstruction.cs" />
     <Compile Include="Injection\MethodUtil.cs" />
     <Compile Include="MethodCallNode.cs" />
     <Compile Include="MethodCallTree.cs" />
@@ -87,7 +78,7 @@
     <Compile Include="Mono.Cecil.Cil\ILProcessor.cs" />
     <Compile Include="Mono.Cecil.Cil\Instruction.cs" />
     <Compile Include="Mono.Cecil.Cil\MethodBody.cs" />
-    <Compile Include="Mono.Cecil.Cil\MethodBodyRocs.cs" />
+    <Compile Include="Mono.Cecil.Cil\MethodBodyRocks.cs" />
     <Compile Include="Mono.Cecil.Cil\OpCode.cs" />
     <Compile Include="Mono.Cecil.Cil\OpCodes.cs" />
     <Compile Include="Mono.Cecil.Cil\CecilMethodBodyBuilder.cs" />

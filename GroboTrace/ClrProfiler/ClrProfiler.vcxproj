@@ -152,13 +152,11 @@
   <ItemGroup>
     <ClInclude Include="ClassFactory.h" />
     <ClInclude Include="CorProfiler.h" />
-    <ClInclude Include="ILRewriter.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ClassFactory.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="CorProfiler.cpp" />
-    <ClCompile Include="ILRewriter.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="ClrProfiler.def" />
