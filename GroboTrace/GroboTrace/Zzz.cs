@@ -423,21 +423,24 @@ namespace GroboTrace
             var rawSignature = module.ResolveSignature((int)methodToken);
             var methodSignature = new SignatureReader(rawSignature).ReadAndParseMethodSignature();
 
-            Debug.WriteLine(".NET: method's signature is: " + Convert.ToBase64String(rawSignature));
-            Debug.WriteLine(".NET: method has {0} parameters", methodSignature.ParamCount);
+            //var output = method.IsConstructor && method.DeclaringType.FullName.Contains("JsonSerializer");
+            var output = method.IsConstructor && method.DeclaringType.FullName.Contains("SKBKontur.Catalogue.ClientLib.Sharding");
 
-            Debug.WriteLine(".NET: method {0} is asked to be traced", method);
+            if(output) Debug.WriteLine(".NET: method's signature is: " + Convert.ToBase64String(rawSignature));
+            if (output) Debug.WriteLine(".NET: method has {0} parameters", methodSignature.ParamCount);
+
+            if (output) Debug.WriteLine(".NET: method {0} is asked to be traced", method);
 
             var methodBody = new CodeReader(rawMethodBody, module).ReadMethodBody();
 
-            sendToDebug("Plain", method, methodBody);
+            if (output) sendToDebug("Plain", method, methodBody);
 
             var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
 
             if(methodBody.isTiny)
-                Debug.WriteLine(method + " is tiny");
+                if (output) Debug.WriteLine(method + " is tiny");
 
-            Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
+            if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
 //            if (methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
 //            {
@@ -478,6 +481,33 @@ namespace GroboTrace
             var methodFinishedToken = signatureTokenBuilder(moduleId, methodFinishedSignature);
 
             int startIndex = 0;
+
+            if(method.IsConstructor)
+            {
+                var declaringType = method.ReflectedType ?? method.DeclaringType;
+                //if(declaringType.FullName.Contains("SKBKontur.Catalogue.ClientLib.Sharding"))
+                //    startIndex = 1;
+                if(declaringType != null)
+                {
+                    var baseType = declaringType.BaseType ?? typeof(object);
+                    var constructors = new HashSet<int>(declaringType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                        .Concat(baseType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)).Select(c => c.MetadataToken));
+                    for(int i = 0; i < methodBody.Instructions.Count; ++i)
+                    {
+                        var instruction = methodBody.Instructions[i];
+                        if(instruction.OpCode != OpCodes.Call) continue;
+                        var token = (MetadataToken)instruction.Operand;
+                        //if(token.TokenType == TokenType.MethodSpec) continue;
+                        MethodBase m = ResolveMethod(module, token, declaringType.IsGenericType ? declaringType.GenericTypeArguments : null, method.IsGenericMethod ? method.GetGenericArguments() : null);
+                        //var m = module.ResolveMethod(token.ToInt32(), declaringType.IsGenericType ? declaringType.GenericTypeArguments : null, method.IsGenericMethod ? method.GetGenericArguments() : null);
+                        if(constructors.Contains(m.MetadataToken))
+                        {
+                            startIndex = i + 1;
+                            break;
+                        }
+                    }
+                }
+            }
 
             methodBody.Instructions.Insert(startIndex++, Instruction.Create(IntPtr.Size == 4 ? OpCodes.Ldc_I4 : OpCodes.Ldc_I8, IntPtr.Size == 4 ? (int)ticksReaderAddress : (long)ticksReaderAddress));
             methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Calli, ticksReaderToken));
@@ -523,17 +553,17 @@ namespace GroboTrace
 
             methodBody.ExceptionHandlers.Add(newException);
 
-            Debug.WriteLine("Initial maxStackSize = " + methodBody.TemporaryMaxStack);
-            Debug.WriteLine("");
+            if (output) Debug.WriteLine("Initial maxStackSize = " + methodBody.TemporaryMaxStack);
+            if (output) Debug.WriteLine("");
 
             methodBody.Seal();
           
             var methodBytes = methodBody.GetFullMethodBody(module, sig => signatureTokenBuilder(moduleId, sig), Math.Max(methodBody.TemporaryMaxStack, 4));
 
-            sendToDebug("Changed", method, methodBody);
+            if (output) sendToDebug("Changed", method, methodBody);
 
-            Debug.WriteLine("Calculated maxStackSize = " + methodBody.TemporaryMaxStack);
-            Debug.WriteLine("");
+            if (output) Debug.WriteLine("Calculated maxStackSize = " + methodBody.TemporaryMaxStack);
+            if (output) Debug.WriteLine("");
 
             var newMethodBody = (IntPtr)allocateForMethodBody(moduleId, (uint)methodBytes.Length);
             Marshal.Copy(methodBytes, 0, newMethodBody, methodBytes.Length);
@@ -560,6 +590,32 @@ namespace GroboTrace
             response.mapEntriesCount = (uint)oldOffsets.Count;
 
             return response;
+        }
+
+        private static readonly Type __canon = typeof(object).Assembly.GetTypes().First(t => t.FullName == "System.__Canon");
+
+        private static MethodBase ResolveMethod(Module module, MetadataToken token, Type[] genericTypeArguments, Type[] genericMethodArguments)
+        {
+            genericTypeArguments = Enumerable.Repeat(__canon, 10).ToArray();
+            genericMethodArguments = Enumerable.Repeat(__canon, 10).ToArray();
+            switch (token.TokenType)
+            {
+                case TokenType.MethodSpec:
+                case TokenType.Method:
+                return module.ResolveMethod(token.ToInt32(), genericTypeArguments, genericMethodArguments);
+                case TokenType.MemberRef:
+                var member = module.ResolveMember(token.ToInt32(), genericTypeArguments, genericMethodArguments);
+                switch(member.MemberType)
+                {
+                        case MemberTypes.Constructor:
+                        case MemberTypes.Method:
+                    return (MethodBase)member;
+                        default:
+                    return null;
+                }
+                default:
+                return null;
+            }
         }
 
         public static void AddMethod(MethodBase method, out int functionId)
