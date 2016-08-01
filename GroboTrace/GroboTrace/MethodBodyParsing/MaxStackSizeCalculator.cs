@@ -7,9 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
 
-using GroboTrace.Mono.Cecil.Metadata;
-
-namespace GroboTrace.Mono.Cecil.Cil
+namespace GroboTrace.MethodBodyParsing
 {
     public class MaxStackSizeCalculator
     {

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace GroboTrace.Mono.Cecil.Cil
+namespace GroboTrace.MethodBodyParsing
 {
     public class LocalInfo
     {

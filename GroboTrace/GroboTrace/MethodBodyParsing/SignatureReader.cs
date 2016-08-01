@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Linq;
 
-using GroboTrace.Mono.Cecil.Metadata;
-using GroboTrace.Mono.Cecil.PE;
-
-namespace GroboTrace.Mono.Cecil.Cil
+namespace GroboTrace.MethodBodyParsing
 {
     public class ParsedMethodSignature
     {

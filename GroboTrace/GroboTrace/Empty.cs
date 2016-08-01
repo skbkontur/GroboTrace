@@ -9,19 +9,18 @@
 //
 
 using System;
-using GroboTrace.Mono.Collections.Generic;
 
-namespace GroboTrace.Mono {
+namespace GroboTrace {
 
-	static class Empty<T> {
+	internal static class Empty<T> {
 
 		public static readonly T [] Array = new T [0];
 	}
 }
 
-namespace GroboTrace.Mono.Cecil {
+namespace GroboTrace {
 
-	static partial class Mixin {
+	internal static partial class Mixin {
 
 		public static bool IsNullOrEmpty<T> (this T [] self)
 		{

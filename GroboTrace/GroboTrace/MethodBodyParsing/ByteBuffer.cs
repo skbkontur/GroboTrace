@@ -11,7 +11,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace GroboTrace.Mono.Cecil.PE {
+namespace GroboTrace.MethodBodyParsing {
 
     unsafe class RawByteBuffer
     {

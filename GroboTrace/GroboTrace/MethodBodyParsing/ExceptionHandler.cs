@@ -11,9 +11,7 @@
 using System;
 using System.Text;
 
-using GroboTrace.Mono.Cecil.Metadata;
-
-namespace GroboTrace.Mono.Cecil.Cil
+namespace GroboTrace.MethodBodyParsing
 {
     public enum ExceptionHandlerType
     {

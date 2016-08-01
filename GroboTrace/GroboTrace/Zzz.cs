@@ -9,17 +9,15 @@ using System.Runtime.InteropServices;
 using System.Threading;
 
 using GroboTrace.Injection;
-using GroboTrace.Mono.Cecil.Cil;
-using GroboTrace.Mono.Cecil.Metadata;
-using GroboTrace.Mono.Collections.Generic;
+using GroboTrace.MethodBodyParsing;
 
 using RGiesecke.DllExport;
 
-using ExceptionHandler = GroboTrace.Mono.Cecil.Cil.ExceptionHandler;
-using MetadataToken = GroboTrace.Mono.Cecil.Metadata.MetadataToken;
-using MethodBody = GroboTrace.Mono.Cecil.Cil.MethodBody;
-using OpCode = GroboTrace.Mono.Cecil.Cil.OpCode;
-using OpCodes = GroboTrace.Mono.Cecil.Cil.OpCodes;
+using ExceptionHandler = GroboTrace.MethodBodyParsing.ExceptionHandler;
+using MetadataToken = GroboTrace.MethodBodyParsing.MetadataToken;
+using MethodBody = GroboTrace.MethodBodyParsing.MethodBody;
+using OpCode = GroboTrace.MethodBodyParsing.OpCode;
+using OpCodes = GroboTrace.MethodBodyParsing.OpCodes;
 
 namespace GroboTrace
 {

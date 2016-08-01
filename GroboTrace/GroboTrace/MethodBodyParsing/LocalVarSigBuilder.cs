@@ -1,11 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Reflection;
 using System.Reflection.Emit;
 
-using GroboTrace.Mono.Cecil.PE;
-
-namespace GroboTrace.Mono.Cecil.Cil
+namespace GroboTrace.MethodBodyParsing
 {
     public class LocalVarSigBuilder
     {

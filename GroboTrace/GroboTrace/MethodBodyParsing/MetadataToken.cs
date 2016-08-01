@@ -10,7 +10,7 @@
 
 using System;
 
-namespace GroboTrace.Mono.Cecil.Metadata {
+namespace GroboTrace.MethodBodyParsing {
 
 	public struct MetadataToken : IEquatable<MetadataToken> {
 

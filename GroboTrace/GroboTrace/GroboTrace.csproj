@@ -63,33 +63,32 @@
     <Compile Include="MethodCallTree.cs" />
     <Compile Include="MethodStats.cs" />
     <Compile Include="MethodStatsNode.cs" />
-    <Compile Include="Mono.Cecil.Cil\ExceptionsBaker.cs" />
-    <Compile Include="Mono.Cecil.Cil\ILCodeBaker.cs" />
-    <Compile Include="Mono.Cecil.Cil\InstructionCollection.cs" />
-    <Compile Include="Mono.Cecil.Cil\LocalInfo.cs" />
-    <Compile Include="Mono.Cecil.Cil\LocalInfoCollection.cs" />
-    <Compile Include="Mono.Cecil.Cil\LocalVarSigBuilder.cs" />
-    <Compile Include="Mono.Cecil.Cil\MaxStackSizeCalculator.cs" />
-    <Compile Include="Mono.Cecil.Cil\Code.cs" />
-    <Compile Include="Mono.Cecil.Cil\CodeReader.cs" />
-    <Compile Include="Mono.Cecil.Cil\MethodBodyBaker.cs" />
-    <Compile Include="Mono.Cecil.Cil\CycleFinder.cs" />
-    <Compile Include="Mono.Cecil.Cil\ExceptionHandler.cs" />
-    <Compile Include="Mono.Cecil.Cil\ILProcessor.cs" />
-    <Compile Include="Mono.Cecil.Cil\Instruction.cs" />
-    <Compile Include="Mono.Cecil.Cil\MethodBody.cs" />
-    <Compile Include="Mono.Cecil.Cil\MethodBodyRocks.cs" />
-    <Compile Include="Mono.Cecil.Cil\OpCode.cs" />
-    <Compile Include="Mono.Cecil.Cil\OpCodes.cs" />
-    <Compile Include="Mono.Cecil.Cil\CecilMethodBodyBuilder.cs" />
-    <Compile Include="Mono.Cecil.Cil\SignatureReader.cs" />
-    <Compile Include="Mono.Cecil.Metadata\ElementType.cs" />
-    <Compile Include="Mono.Cecil.Metadata\MetadataToken.cs" />
-    <Compile Include="Mono.Cecil.Metadata\TokenType.cs" />
-    <Compile Include="Mono.Cecil.PE\ByteBuffer.cs" />
-    <Compile Include="Mono.Collections.Generic\Collection.cs" />
-    <Compile Include="Mono.Collections.Generic\ReadOnlyCollection.cs" />
-    <Compile Include="Mono\Empty.cs" />
+    <Compile Include="MethodBodyParsing\ExceptionsBaker.cs" />
+    <Compile Include="MethodBodyParsing\ILCodeBaker.cs" />
+    <Compile Include="MethodBodyParsing\InstructionCollection.cs" />
+    <Compile Include="MethodBodyParsing\LocalInfo.cs" />
+    <Compile Include="MethodBodyParsing\LocalInfoCollection.cs" />
+    <Compile Include="MethodBodyParsing\LocalVarSigBuilder.cs" />
+    <Compile Include="MethodBodyParsing\MaxStackSizeCalculator.cs" />
+    <Compile Include="MethodBodyParsing\Code.cs" />
+    <Compile Include="MethodBodyParsing\CodeReader.cs" />
+    <Compile Include="MethodBodyParsing\MethodBodyBaker.cs" />
+    <Compile Include="MethodBodyParsing\CycleFinder.cs" />
+    <Compile Include="MethodBodyParsing\ExceptionHandler.cs" />
+    <Compile Include="MethodBodyParsing\ILProcessor.cs" />
+    <Compile Include="MethodBodyParsing\Instruction.cs" />
+    <Compile Include="MethodBodyParsing\MethodBody.cs" />
+    <Compile Include="MethodBodyParsing\MethodBodyRocks.cs" />
+    <Compile Include="MethodBodyParsing\OpCode.cs" />
+    <Compile Include="MethodBodyParsing\OpCodes.cs" />
+    <Compile Include="MethodBodyParsing\CecilMethodBodyBuilder.cs" />
+    <Compile Include="MethodBodyParsing\SignatureReader.cs" />
+    <Compile Include="MethodBodyParsing\ElementType.cs" />
+    <Compile Include="MethodBodyParsing\MetadataToken.cs" />
+    <Compile Include="MethodBodyParsing\TokenType.cs" />
+    <Compile Include="MethodBodyParsing\ByteBuffer.cs" />
+    <Compile Include="Collection.cs" />
+    <Compile Include="Empty.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Stats.cs" />
     <Compile Include="TracingAnalyzer.cs" />
@@ -97,6 +96,13 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Mono.Cecil.Cil\" />
+    <Folder Include="Mono.Cecil.Metadata\" />
+    <Folder Include="Mono.Cecil.PE\" />
+    <Folder Include="Mono.Collections.Generic\" />
+    <Folder Include="Mono\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

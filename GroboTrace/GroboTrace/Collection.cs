@@ -12,9 +12,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
-using GroboTrace.Mono.Cecil;
-
-namespace GroboTrace.Mono.Collections.Generic {
+namespace GroboTrace {
 
 	public class Collection<T> : IList<T>, IList {
 

@@ -1,12 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 
-using GroboTrace.Mono.Cecil.Metadata;
-using GroboTrace.Mono.Collections.Generic;
-
-namespace GroboTrace.Mono.Cecil.Cil
+namespace GroboTrace.MethodBodyParsing
 {
     public sealed class MethodBody
     {

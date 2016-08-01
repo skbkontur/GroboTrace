@@ -1,6 +1,4 @@
-using GroboTrace.Mono.Collections.Generic;
-
-namespace GroboTrace.Mono.Cecil.Cil
+namespace GroboTrace.MethodBodyParsing
 {
     class LocalInfoCollection : Collection<LocalInfo>
     {

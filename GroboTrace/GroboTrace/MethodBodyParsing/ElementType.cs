@@ -8,7 +8,7 @@
 // Licensed under the MIT/X11 license.
 //
 
-namespace GroboTrace.Mono.Cecil.Metadata {
+namespace GroboTrace.MethodBodyParsing {
 
 	enum ElementType : byte {
 		None = 0x00,

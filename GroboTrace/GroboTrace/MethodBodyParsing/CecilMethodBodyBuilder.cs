@@ -1,17 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
-using GroboTrace.Mono.Cecil.Metadata;
-using GroboTrace.Mono.Cecil.PE;
-using GroboTrace.Mono.Collections.Generic;
-
-using ReflectionMethodBody = System.Reflection.MethodBody;
-
-namespace GroboTrace.Mono.Cecil.Cil
+namespace GroboTrace.MethodBodyParsing
 {
 
     // todo: refactor this

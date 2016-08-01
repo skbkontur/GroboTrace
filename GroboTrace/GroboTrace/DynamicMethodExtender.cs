@@ -3,14 +3,11 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
 
-using GroboTrace.Mono;
-using GroboTrace.Mono.Cecil.Cil;
-using GroboTrace.Mono.Cecil.Metadata;
-using GroboTrace.Mono.Cecil.PE;
+using GroboTrace.MethodBodyParsing;
 
-using CecilMethodBody = GroboTrace.Mono.Cecil.Cil.MethodBody;
-using ExceptionHandler = GroboTrace.Mono.Cecil.Cil.ExceptionHandler;
-using OpCodes = GroboTrace.Mono.Cecil.Cil.OpCodes;
+using CecilMethodBody = GroboTrace.MethodBodyParsing.MethodBody;
+using ExceptionHandler = GroboTrace.MethodBodyParsing.ExceptionHandler;
+using OpCodes = GroboTrace.MethodBodyParsing.OpCodes;
 
 namespace GroboTrace
 {

@@ -8,7 +8,7 @@
 // Licensed under the MIT/X11 license.
 //
 
-namespace GroboTrace.Mono.Cecil.Cil
+namespace GroboTrace.MethodBodyParsing
 {
     public enum Code
     {

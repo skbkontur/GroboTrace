@@ -9,19 +9,9 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Reflection;
-using System.Reflection.Emit;
 
-using GroboTrace.Mono.Cecil.Metadata;
-using GroboTrace.Mono.Cecil.PE;
-using GroboTrace.Mono.Collections.Generic;
-
-using RVA = System.UInt32;
-
-namespace GroboTrace.Mono.Cecil.Cil
+namespace GroboTrace.MethodBodyParsing
 {
     internal sealed class MethodBodyBaker : ByteBuffer
     {
