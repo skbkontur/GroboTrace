@@ -97,13 +97,7 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Mono.Cecil.Cil\" />
-    <Folder Include="Mono.Cecil.Metadata\" />
-    <Folder Include="Mono.Cecil.PE\" />
-    <Folder Include="Mono.Collections.Generic\" />
-    <Folder Include="Mono\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>copy $(TargetDir)$(TargetName).dll $(SolutionDir)..\Assemblies\
