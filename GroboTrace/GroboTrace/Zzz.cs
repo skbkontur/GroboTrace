@@ -434,11 +434,13 @@ namespace GroboTrace
             if (output) sendToDebug("Plain", method, methodBody);
 
             var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
+            if(methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
+                throw new InvalidOperationException("BUGBUGBUG");
 
             if(methodBody.isTiny)
                 if (output) Debug.WriteLine(method + " is tiny");
 
-            if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
+//            if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
 //            if (methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
 //            {

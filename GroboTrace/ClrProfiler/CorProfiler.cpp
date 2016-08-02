@@ -56,6 +56,8 @@ void DebugOutput(WCHAR* str)
 
 HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk)
 {
+	OutputDebugString(L"Profiler started");
+
 	corProfiler = this;
 
     HRESULT queryInterfaceResult = pICorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo4), reinterpret_cast<void **>(&this->corProfilerInfo));
@@ -72,6 +74,8 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
     auto hr = this->corProfilerInfo->SetEventMask(eventMask);
 
 	InitializeCriticalSection(&criticalSection);
+
+	OutputDebugString(L"Profiler successfully initialized");
 
     return S_OK;
 }

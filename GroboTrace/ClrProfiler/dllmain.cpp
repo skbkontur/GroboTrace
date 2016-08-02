@@ -14,8 +14,8 @@ BOOL STDMETHODCALLTYPE DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID
 
 extern "C" HRESULT STDMETHODCALLTYPE DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* ppv)
 {
-    // {cf0d821e-299b-5307-a3d8-b283c03916dd}
-    const GUID CLSID_CorProfiler = { 0xcf0d821e, 0x299b, 0x5307, { 0xa3, 0xd8, 0xb2, 0x83, 0xc0, 0x39, 0x16, 0xdd } };
+    // {1bde2824-ad74-46f0-95a4-d7e7dab3b6b6}
+    const GUID CLSID_CorProfiler = { 0x1bde2824, 0xad74, 0x46f0, { 0x95, 0xa4, 0xd7, 0xe7, 0xda, 0xb3, 0xb6, 0xb6 } };
 
     if (ppv == nullptr || rclsid != CLSID_CorProfiler)
     {

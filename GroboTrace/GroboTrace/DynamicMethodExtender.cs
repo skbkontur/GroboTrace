@@ -89,6 +89,8 @@ namespace GroboTrace
             Debug.WriteLine(methodBody);
 
             var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
+            if (methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
+                throw new InvalidOperationException("BUGBUGBUG");
 
             //     if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
             //     {
@@ -153,6 +155,8 @@ namespace GroboTrace
             Debug.WriteLine(methodBody);
 
             var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
+            if (methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
+                throw new InvalidOperationException("BUGBUGBUG");
 
             //     if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
             //     {
@@ -160,7 +164,7 @@ namespace GroboTrace
             //         return;
             //     }
 
-           
+
             AddLocalVariables(methodBody, ilGenerator);
 
             var scope = t_DynamicILGenerator.GetField("m_scope", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(ilGenerator);
