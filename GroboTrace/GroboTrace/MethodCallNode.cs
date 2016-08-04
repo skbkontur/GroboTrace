@@ -86,10 +86,17 @@ namespace GroboTrace
 
         public void ClearStats()
         {
-            Calls = 0;
-            Ticks = 0;
-            foreach(var child in Children)
-                child.ClearStats();
+            var queue = new Queue<MethodCallNode>();
+            queue.Enqueue(this);
+            while(queue.Count > 0)
+            {
+                var node = queue.Dequeue();
+                node.Calls = 0;
+                node.Ticks = 0;
+                foreach(var child in node.children)
+                    if(child != null)
+                        queue.Enqueue(child);
+            }
         }
 
         public int MethodId { get; set; }

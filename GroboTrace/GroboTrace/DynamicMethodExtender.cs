@@ -48,16 +48,24 @@ namespace GroboTrace
 
         private void Extend()
         {
-            var dynamicILInfo = t_DynamicMethod.GetField("m_DynamicILInfo", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicMethod);
-            var ilGenerator = t_DynamicMethod.GetField("m_ilGenerator", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicMethod);
+            if(Zzz.tracedMethods.ContainsKey(dynamicMethod))
+                return;
+            lock(dynamicMethod)
+            {
+                if(Zzz.tracedMethods.ContainsKey(dynamicMethod))
+                    return;
+                var dynamicILInfo = t_DynamicMethod.GetField("m_DynamicILInfo", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicMethod);
+                var ilGenerator = t_DynamicMethod.GetField("m_ilGenerator", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(dynamicMethod);
 
-            if (dynamicILInfo != null)
-            {
-                ExtendFromDynamicILInfo((DynamicILInfo)dynamicILInfo);
-            }
-            else if (ilGenerator != null)
-            {
-                ExtendFromILGenerator((ILGenerator)ilGenerator);
+                if (dynamicILInfo != null)
+                {
+                    ExtendFromDynamicILInfo((DynamicILInfo)dynamicILInfo);
+                }
+                else if (ilGenerator != null)
+                {
+                    ExtendFromILGenerator((ILGenerator)ilGenerator);
+                }
+                Zzz.tracedMethods.TryAdd(dynamicMethod, 0);
             }
         }
 

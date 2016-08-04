@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -112,6 +113,8 @@ namespace GroboTrace
 
             //Console.ReadLine();
         }
+
+        internal static ConcurrentDictionary<MethodBase, int> tracedMethods = new ConcurrentDictionary<MethodBase, int>();
 
         public static long TemplateForTicksSignature()
         {
