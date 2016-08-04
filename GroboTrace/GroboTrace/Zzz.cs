@@ -422,7 +422,8 @@ namespace GroboTrace
             var methodSignature = new SignatureReader(rawSignature).ReadAndParseMethodSignature();
 
             //var output = method.IsConstructor && method.DeclaringType.FullName.Contains("JsonSerializer");
-            var output = method.IsConstructor && method.DeclaringType.FullName.Contains("SKBKontur.Catalogue.ClientLib.Sharding");
+            //var output = method.IsConstructor && method.DeclaringType.FullName.Contains("SKBKontur.Catalogue.ClientLib.Sharding");
+            var output = true;
 
             if(output) Debug.WriteLine(".NET: method's signature is: " + Convert.ToBase64String(rawSignature));
             if (output) Debug.WriteLine(".NET: method has {0} parameters", methodSignature.ParamCount);
@@ -433,14 +434,16 @@ namespace GroboTrace
 
             if (output) sendToDebug("Plain", method, methodBody);
 
-            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
-            if(methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
-                throw new InvalidOperationException("BUGBUGBUG");
+//            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
+//            if(methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
+//                throw new InvalidOperationException("BUGBUGBUG");
 
-            if(methodBody.isTiny)
+            var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
+
+            if (methodBody.isTiny)
                 if (output) Debug.WriteLine(method + " is tiny");
 
-//            if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
+            if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
 //            if (methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
 //            {

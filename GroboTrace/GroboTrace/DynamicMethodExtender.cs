@@ -88,9 +88,12 @@ namespace GroboTrace
             Debug.WriteLine("Initial methodBody of DynamicMethod");
             Debug.WriteLine(methodBody);
 
-            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
-            if (methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
-                throw new InvalidOperationException("BUGBUGBUG");
+            //            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
+            //            if (methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
+            //                throw new InvalidOperationException("BUGBUGBUG");
+
+            var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
+            Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
             //     if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
             //     {
@@ -154,9 +157,12 @@ namespace GroboTrace
             Debug.WriteLine("Initial methodBody of DynamicMethod");
             Debug.WriteLine(methodBody);
 
-            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
-            if (methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
-                throw new InvalidOperationException("BUGBUGBUG");
+//            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
+//            if (methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
+//                throw new InvalidOperationException("BUGBUGBUG");
+
+            var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
+            Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
             //     if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
             //     {
