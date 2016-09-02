@@ -476,7 +476,7 @@ namespace GroboTrace
             ticksLocalIndex = methodBody.AddLocalVariable(typeof(long)).LocalIndex;
 
             
-            ReplaceRetInstructions(methodBody.Instructions, resultLocalIndex >= 0, resultLocalIndex);
+            var endInstructionBeforeModifying = ReplaceRetInstructions(methodBody.Instructions, resultLocalIndex >= 0, resultLocalIndex);
             
 
             var ticksReaderSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
@@ -558,6 +558,10 @@ namespace GroboTrace
             newException.HandlerEnd = finallyEndInstruction;
 
             methodBody.Instructions.Insert(methodBody.Instructions.IndexOf(tryEndInstruction), Instruction.Create(OpCodes.Leave, finallyEndInstruction));
+
+            foreach (var exceptionHandler in methodBody.ExceptionHandlers)
+                if (exceptionHandler.HandlerEnd == null)
+                    exceptionHandler.HandlerEnd = endInstructionBeforeModifying;
 
             methodBody.ExceptionHandlers.Add(newException);
 
@@ -682,7 +686,7 @@ namespace GroboTrace
             return arrayIndex;
         }
 
-        public static void ReplaceRetInstructions(Collection<Instruction> instructions, bool hasReturnType, int resultLocalIndex = -1)
+        public static Instruction ReplaceRetInstructions(Collection<Instruction> instructions, bool hasReturnType, int resultLocalIndex = -1)
         {
             if(hasReturnType && resultLocalIndex == -1)
                 throw new ArgumentException("hasReturnType = true, but resultLocalIndex = -1");
@@ -708,6 +712,7 @@ namespace GroboTrace
                 }
                 ++index;
             }
+            return dummyInstr;
         }
 
         public static void sendToDebug(String label, MethodBase method, MethodBody methodBody)
