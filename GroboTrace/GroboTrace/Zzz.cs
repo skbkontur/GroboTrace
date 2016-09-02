@@ -418,6 +418,8 @@ namespace GroboTrace
                 return response;
             }
 
+            Debug.WriteLine(".NET: type = {0}, method = {1}", method.DeclaringType, method);
+
             int functionId;
             AddMethod(method, out functionId);
 

@@ -92,16 +92,18 @@ namespace GroboTrace
             
             UnbindDynamicResolver(dynamicResolver);
 
-            Debug.WriteLine("");
-            Debug.WriteLine("Initial methodBody of DynamicMethod");
-            Debug.WriteLine(methodBody);
+            bool output = true;
+
+            if(output) Debug.WriteLine("");
+            if (output) Debug.WriteLine("Initial methodBody of DynamicMethod");
+            if (output) Debug.WriteLine(methodBody);
 
             //            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
             //            if (methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
             //                throw new InvalidOperationException("BUGBUGBUG");
 
             var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
-            Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
+            if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
             //     if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
             //     {
@@ -131,9 +133,9 @@ namespace GroboTrace
 
             newDynamicILInfo.SetLocalSignature(methodBody.GetLocalSignature());
 
-            Debug.WriteLine("");
-            Debug.WriteLine("Changed methodBody of DynamicMethod");
-            Debug.WriteLine(methodBody);
+            if (output) Debug.WriteLine("");
+            if (output) Debug.WriteLine("Changed methodBody of DynamicMethod");
+            if (output) Debug.WriteLine(methodBody);
 
         }
 
@@ -161,16 +163,18 @@ namespace GroboTrace
 
             UnbindDynamicResolver(dynamicResolver);
 
-            Debug.WriteLine("");
-            Debug.WriteLine("Initial methodBody of DynamicMethod");
-            Debug.WriteLine(methodBody);
+            bool output = true;
+
+            if(output) Debug.WriteLine("");
+            if (output) Debug.WriteLine("Initial methodBody of DynamicMethod");
+            if (output) Debug.WriteLine(methodBody);
 
 //            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
 //            if (methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
 //                throw new InvalidOperationException("BUGBUGBUG");
 
             var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
-            Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
+            if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
             //     if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
             //     {
@@ -202,9 +206,9 @@ namespace GroboTrace
 
             newDynamicILInfo.SetLocalSignature(methodBody.GetLocalSignature());
 
-            Debug.WriteLine("");
-            Debug.WriteLine("Changed methodBody of DynamicMethod");
-            Debug.WriteLine(methodBody);
+            if (output) Debug.WriteLine("");
+            if (output) Debug.WriteLine("Changed methodBody of DynamicMethod");
+            if (output) Debug.WriteLine(methodBody);
         }
 
 
