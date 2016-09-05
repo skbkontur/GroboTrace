@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Threading;
 
@@ -55,17 +56,48 @@ namespace GroboTrace
         {
             var ticks = Zzz.TicksReader();
             var localTree = GetTree();
-            return new Stats
-                {
-                    ElapsedTicks = localTree == null ? 0 : ticks - localTree.startTicks,
-                    Tree = localTree == null ? new MethodStatsNode() : localTree.GetStatsAsTree(ticks),
-                    List = localTree == null ? new List<MethodStats>() : localTree.GetStatsAsList(ticks)
-                };
+            var thread = new Thread(GetStatsInternal, 100 * 1024 * 1024);
+            var args = new GetStatsArgs
+            {
+                ticks = ticks,
+                tree = localTree
+            };
+            thread.Start(args);
+            thread.Join();
+            return args.stats;
+        }
+
+        private class GetStatsArgs
+        {
+            public long ticks;
+            public MethodCallTree tree;
+            public Stats stats;
+        }
+
+        private static void GetStatsInternal(object p)
+        {
+            var args = (GetStatsArgs)p;
+            var localTree = args.tree;
+            var ticks = args.ticks;
+            args.stats = new Stats
+            {
+                ElapsedTicks = localTree == null ? 0 : ticks - localTree.startTicks,
+                Tree = localTree == null ? new MethodStatsNode() : localTree.GetStatsAsTree(ticks),
+                List = localTree == null ? new List<MethodStats>() : localTree.GetStatsAsList(ticks)
+            };
         }
 
         public static void ClearStats()
         {
             var localTree = GetTree();
+            var thread = new Thread(ClearStatsInternal, 100 * 1024 * 1024);
+            thread.Start(localTree);
+            thread.Join();
+        }
+
+        private static void ClearStatsInternal(object p)
+        {
+            var localTree = (MethodCallTree)p;
             if (localTree != null)
                 localTree.ClearStats();
         }

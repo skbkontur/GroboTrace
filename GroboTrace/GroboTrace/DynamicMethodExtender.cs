@@ -105,11 +105,11 @@ namespace GroboTrace
             var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
             if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
-            //     if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
-            //     {
-            //         Debug.WriteLine(dynamicMethod + " too simple to be traced");
-            //         return;
-            //     }
+            if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
+            {
+                Debug.WriteLine(dynamicMethod + " too simple to be traced");
+                return;
+            }
 
             AddLocalVariables(methodBody, oldDynamicILInfo);
             
@@ -176,11 +176,11 @@ namespace GroboTrace
             var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
             if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
-            //     if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
-            //     {
-            //         Debug.WriteLine(dynamicMethod + " too simple to be traced");
-            //         return;
-            //     }
+            if(methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
+            {
+                Debug.WriteLine(dynamicMethod + " too simple to be traced");
+                return;
+            }
 
 
             AddLocalVariables(methodBody, ilGenerator);

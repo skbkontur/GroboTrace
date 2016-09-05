@@ -450,11 +450,11 @@ namespace GroboTrace
 
             if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
-//            if (methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
-//            {
-//                Debug.WriteLine(method + " too simple to be traced");
-//                return response;
-//            }
+            if (methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
+            {
+                Debug.WriteLine(method + " too simple to be traced");
+                return response;
+            }
 
             //if (method.Name == "Main" || method.Name == "add2" || method.Name == "twice")
             //    return response;
