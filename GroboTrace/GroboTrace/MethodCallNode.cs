@@ -44,13 +44,8 @@ namespace GroboTrace
             return parent;
         }
 
-        public MethodStatsNode GetStats(long totalTicks, int depth)
+        public MethodStatsNode GetStats(long totalTicks)
         {
-            if(depth > 10000)
-                return new MethodStatsNode
-                    {
-                        MethodStats = new MethodStats()
-                    };
             return new MethodStatsNode
                 {
                     MethodStats = new MethodStats
@@ -62,20 +57,19 @@ namespace GroboTrace
                         },
                     Children = Children.Select(child =>
                         {
-                            var childStats = child.GetStats(totalTicks, depth + 1);
+                            var childStats = child.GetStats(totalTicks);
                             return childStats;
                         }).OrderByDescending(stats => stats.MethodStats.Ticks).
                                         ToArray()
                 };
         }
 
-        public void GetStats(Dictionary<MethodBase, MethodStats> statsDict, int depth)
+        public void GetStats(Dictionary<MethodBase, MethodStats> statsDict)
         {
-            if(depth > 10000) return;
             var selfTicks = Ticks;
             foreach(var child in Children)
             {
-                child.GetStats(statsDict, depth + 1);
+                child.GetStats(statsDict);
                 selfTicks -= child.Ticks;
             }
             var method = Zzz.GetMethod(MethodId);

@@ -420,8 +420,17 @@ namespace GroboTrace
 
             Debug.WriteLine(".NET: type = {0}, method = {1}", method.DeclaringType, method);
 
-            int functionId;
-            AddMethod(method, out functionId);
+            if(method.GetCustomAttribute(typeof(DontTraceAttribute), false) != null)
+            {
+                Debug.WriteLine(method + " is marked with DontTraceAttribute and will not be traced");
+                return response;
+            }
+
+            if(method.DeclaringType != null && method.DeclaringType.GetCustomAttribute(typeof(DontTraceAttribute), false) != null)
+            {
+                Debug.WriteLine(method + " declaring type is marked with DontTraceAttribute and will not be traced");
+                return response;
+            }
 
             var rawSignature = module.ResolveSignature((int)methodToken);
             var methodSignature = new SignatureReader(rawSignature).ReadAndParseMethodSignature();
@@ -458,6 +467,9 @@ namespace GroboTrace
 
             //if (method.Name == "Main" || method.Name == "add2" || method.Name == "twice")
             //    return response;
+
+            int functionId;
+            AddMethod(method, out functionId);
 
             List<Tuple<Instruction, int>> oldOffsets = new List<Tuple<Instruction, int>>();
 
