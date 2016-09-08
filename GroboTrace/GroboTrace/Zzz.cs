@@ -22,6 +22,35 @@ using OpCodes = GroboTrace.MethodBodyParsing.OpCodes;
 
 namespace GroboTrace
 {
+    public static class MetadataExtensions
+    {
+        private static readonly Type __canon = typeof(object).Assembly.GetTypes().First(t => t.FullName == "System.__Canon");
+        // todo rename
+        private static readonly Type[] __canons = Enumerable.Repeat(__canon, 1024).ToArray();
+
+        public static MethodBase ResolveMethod(Module module, MetadataToken token)
+        {
+            switch (token.TokenType)
+            {
+                case TokenType.MethodSpec:
+                case TokenType.Method:
+                    return module.ResolveMethod(token.ToInt32(), __canons, __canons);
+                case TokenType.MemberRef:
+                    var member = module.ResolveMember(token.ToInt32(), __canons, __canons);
+                    switch (member.MemberType)
+                    {
+                        case MemberTypes.Constructor:
+                        case MemberTypes.Method:
+                            return (MethodBase)member;
+                        default:
+                            return null;
+                    }
+                default:
+                    return null;
+            }
+        }
+    }
+
     public static class Extensions
     {
         public static Type GetDelegateType(Type[] parameterTypes, Type returnType)
@@ -448,10 +477,6 @@ namespace GroboTrace
 
             if (output) sendToDebug("Plain", method, methodBody);
 
-//            var methodContainsCycles = new CycleFinder(methodBody.Instructions.ToArray()).IsThereAnyCycles();
-//            if(methodContainsCycles != CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray()))
-//                throw new InvalidOperationException("BUGBUGBUG");
-
             var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
 
             if (methodBody.isTiny)
@@ -487,9 +512,7 @@ namespace GroboTrace
 
             ticksLocalIndex = methodBody.AddLocalVariable(typeof(long)).LocalIndex;
 
-            
             var endInstructionBeforeModifying = ReplaceRetInstructions(methodBody.Instructions, resultLocalIndex >= 0, resultLocalIndex);
-            
 
             var ticksReaderSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
             var ticksReaderToken = signatureTokenBuilder(moduleId, ticksReaderSignature);
@@ -504,22 +527,21 @@ namespace GroboTrace
 
             if(method.IsConstructor)
             {
-                var declaringType = method.ReflectedType ?? method.DeclaringType;
-                //if(declaringType.FullName.Contains("SKBKontur.Catalogue.ClientLib.Sharding"))
-                //    startIndex = 1;
+                // Skip call to ::base() or ::this()
+                var declaringType = method.DeclaringType;
                 if(declaringType != null)
                 {
                     var baseType = declaringType.BaseType ?? typeof(object);
-                    var constructors = new HashSet<int>(declaringType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                        .Concat(baseType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)).Select(c => c.MetadataToken));
+                    var bindingFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                    var constructors = new HashSet<int>(declaringType.GetConstructors(bindingFlags)
+                        .Concat(baseType.GetConstructors(bindingFlags))
+                        .Select(c => c.MetadataToken));
                     for(int i = 0; i < methodBody.Instructions.Count; ++i)
                     {
                         var instruction = methodBody.Instructions[i];
                         if(instruction.OpCode != OpCodes.Call) continue;
                         var token = (MetadataToken)instruction.Operand;
-                        //if(token.TokenType == TokenType.MethodSpec) continue;
-                        MethodBase m = ResolveMethod(module, token, declaringType.IsGenericType ? declaringType.GenericTypeArguments : null, method.IsGenericMethod ? method.GetGenericArguments() : null);
-                        //var m = module.ResolveMethod(token.ToInt32(), declaringType.IsGenericType ? declaringType.GenericTypeArguments : null, method.IsGenericMethod ? method.GetGenericArguments() : null);
+                        var m = MetadataExtensions.ResolveMethod(module, token);
                         if(constructors.Contains(m.MetadataToken))
                         {
                             startIndex = i + 1;
@@ -614,32 +636,6 @@ namespace GroboTrace
             response.mapEntriesCount = (uint)oldOffsets.Count;
 
             return response;
-        }
-
-        private static readonly Type __canon = typeof(object).Assembly.GetTypes().First(t => t.FullName == "System.__Canon");
-
-        private static MethodBase ResolveMethod(Module module, MetadataToken token, Type[] genericTypeArguments, Type[] genericMethodArguments)
-        {
-            genericTypeArguments = Enumerable.Repeat(__canon, 10).ToArray();
-            genericMethodArguments = Enumerable.Repeat(__canon, 10).ToArray();
-            switch (token.TokenType)
-            {
-                case TokenType.MethodSpec:
-                case TokenType.Method:
-                return module.ResolveMethod(token.ToInt32(), genericTypeArguments, genericMethodArguments);
-                case TokenType.MemberRef:
-                var member = module.ResolveMember(token.ToInt32(), genericTypeArguments, genericMethodArguments);
-                switch(member.MemberType)
-                {
-                        case MemberTypes.Constructor:
-                        case MemberTypes.Method:
-                    return (MethodBase)member;
-                        default:
-                    return null;
-                }
-                default:
-                return null;
-            }
         }
 
         public static void AddMethod(MethodBase method, out int functionId)
