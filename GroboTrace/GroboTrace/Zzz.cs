@@ -277,7 +277,7 @@ namespace GroboTrace
 
             var localSignature = oldMethodBody.LocalSignatureMetadataToken != 0
                                      ? createDelegateMethod.Module.ResolveSignature(oldMethodBody.LocalSignatureMetadataToken)
-                                     : SignatureHelper.GetLocalVarSigHelper().GetSignature();
+                                     : SignatureHelper.GetLocalVarSigHelper().GetSignature(); // null is invalid value
 
             var methodBody = new CecilMethodBodyBuilder(code, stackSize, initLocals, localSignature, exceptionClauses).GetCecilMethodBody();
 
