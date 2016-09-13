@@ -269,17 +269,8 @@ namespace GroboTrace
                 parameterTypes = new[] {createDelegateMethod.ReflectedType ?? createDelegateMethod.DeclaringType}.Concat(createDelegateMethod.GetParameters().Select(x => x.ParameterType)).ToArray();
             var dynamicMethod = new DynamicMethod(createDelegateMethod.Name + "_" + Guid.NewGuid(), createDelegateMethod.ReturnType, parameterTypes, typeof(DynamicMethod), true);
 
-            var oldMethodBody = createDelegateMethod.GetMethodBody();
-            var code = oldMethodBody.GetILAsByteArray();
-            var stackSize = Math.Max(oldMethodBody.MaxStackSize, 2); // todo посчитать точнее
-            var initLocals = oldMethodBody.InitLocals;
-            var exceptionClauses = oldMethodBody.ExceptionHandlingClauses;
-
-            var localSignature = oldMethodBody.LocalSignatureMetadataToken != 0
-                                     ? createDelegateMethod.Module.ResolveSignature(oldMethodBody.LocalSignatureMetadataToken)
-                                     : SignatureHelper.GetLocalVarSigHelper().GetSignature(); // null is invalid value
-
-            var methodBody = new CecilMethodBodyBuilder(code, stackSize, initLocals, localSignature, exceptionClauses).GetCecilMethodBody();
+            var methodBody = MethodBody.Build(createDelegateMethod, false);
+            methodBody.TemporaryMaxStack = Math.Max(methodBody.TemporaryMaxStack, 2); // todo посчитать точнее
 
             sendToDebug("Plain", createDelegateMethod, methodBody);
 
@@ -311,16 +302,16 @@ namespace GroboTrace
 
             methodBody.Seal();
 
-            dynamicILInfo.SetCode(methodBody.GetILAsByteArray(), stackSize);
+            dynamicILInfo.SetCode(methodBody.GetILAsByteArray(), methodBody.TemporaryMaxStack);
 
             if(methodBody.HasExceptionHandlers)
                 dynamicILInfo.SetExceptions(methodBody.GetExceptionsAsByteArray());
 
-            dynamicILInfo.SetLocalSignature(localSignature);
+            dynamicILInfo.SetLocalSignature(methodBody.GetLocalSignature());
 
-            var methodBody2 = new CecilMethodBodyBuilder(methodBody.GetILAsByteArray(), stackSize, dynamicMethod.InitLocals, localSignature, methodBody.GetExceptionsAsByteArray()).GetCecilMethodBody();
-
-            sendToDebug("Changed", createDelegateMethod, methodBody2);
+//            var methodBody2 = MethodBody.Build(methodBody.GetILAsByteArray(), stackSize, dynamicMethod.InitLocals, localSignature, methodBody.GetExceptionsAsByteArray());
+//
+//            sendToDebug("Changed", createDelegateMethod, methodBody2);
 
             createDelegateMethods.Add(dynamicMethod.CreateDelegate(Extensions.GetDelegateType(parameterTypes, createDelegateMethod.ReturnType)));
 
@@ -461,30 +452,28 @@ namespace GroboTrace
                 return response;
             }
 
-            var rawSignature = module.ResolveSignature((int)methodToken);
-            var methodSignature = new SignatureReader(rawSignature).ReadAndParseMethodSignature();
-
             //var output = method.IsConstructor && method.DeclaringType.FullName.Contains("JsonSerializer");
             //var output = method.IsConstructor && method.DeclaringType.FullName.Contains("SKBKontur.Catalogue.ClientLib.Sharding");
             var output = true;
 
-            if(output) Debug.WriteLine(".NET: method's signature is: " + Convert.ToBase64String(rawSignature));
-            if (output) Debug.WriteLine(".NET: method has {0} parameters", methodSignature.ParamCount);
-
             if (output) Debug.WriteLine(".NET: method {0} is asked to be traced", method);
 
-            var methodBody = new CodeReader(rawMethodBody, module).ReadMethodBody();
+            var methodBody = MethodBody.Build(rawMethodBody, module, new MetadataToken(methodToken), false);
+
+            var rawSignature = methodBody.MethodSignature;
+            var methodSignature = new SignatureReader(rawSignature).ReadAndParseMethodSignature();
+
+            if (output) Debug.WriteLine(".NET: method's signature is: " + Convert.ToBase64String(rawSignature));
+            if (output) Debug.WriteLine(".NET: method has {0} parameters", methodSignature.ParamCount);
+
 
             if (output) sendToDebug("Plain", method, methodBody);
 
             var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
 
-            if (methodBody.isTiny)
-                if (output) Debug.WriteLine(method + " is tiny");
-
             if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
-            if (methodBody.isTiny || !methodContainsCycles && methodBody.Instructions.Count < 50)
+            if (!methodContainsCycles && methodBody.Instructions.Count < 50)
             {
                 Debug.WriteLine(method + " too simple to be traced");
                 return response;

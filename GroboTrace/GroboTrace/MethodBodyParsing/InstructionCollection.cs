@@ -1,6 +1,6 @@
 namespace GroboTrace.MethodBodyParsing
 {
-    internal class InstructionCollection : Collection<Instruction>
+    public class InstructionCollection : Collection<Instruction>
     {
         internal InstructionCollection()
         {
@@ -9,6 +9,33 @@ namespace GroboTrace.MethodBodyParsing
         internal InstructionCollection(int capacity)
             : base(capacity)
         {
+        }
+
+        public Instruction GetInstruction(int offset)
+        {
+            var size = this.size;
+            var items = this.items;
+            if (offset < 0 || offset > items[size - 1].Offset)
+                return null;
+
+            int min = 0;
+            int max = size - 1;
+            while (min <= max)
+            {
+                int mid = min + ((max - min) / 2);
+                var instruction = items[mid];
+                var instruction_offset = instruction.Offset;
+
+                if (offset == instruction_offset)
+                    return instruction;
+
+                if (offset < instruction_offset)
+                    max = mid - 1;
+                else
+                    min = mid + 1;
+            }
+
+            return null;
         }
 
         protected override void OnAdd(Instruction item, int index)

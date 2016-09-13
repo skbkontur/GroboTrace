@@ -7,6 +7,8 @@ namespace GroboTrace.MethodBodyParsing
     {
         public static bool HasCycle(Instruction[] instructions)
         {
+            if(instructions.Length == 0)
+                return false;
             var color = new Dictionary<Instruction, Colors>();
             foreach(var instruction in instructions)
                 color[instruction] = Colors.White;

@@ -13,13 +13,13 @@ using System.Runtime.InteropServices;
 
 namespace GroboTrace.MethodBodyParsing {
 
-    unsafe class RawByteBuffer
+    unsafe class UnmanagedByteBuffer
     {
         // TODO rewrite
         internal byte* buffer;
         internal int position;
 
-        public RawByteBuffer(byte* buffer)
+        public UnmanagedByteBuffer(byte* buffer)
         {
             this.buffer = buffer;
         }
