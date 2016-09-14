@@ -269,7 +269,7 @@ namespace GroboTrace
                 parameterTypes = new[] {createDelegateMethod.ReflectedType ?? createDelegateMethod.DeclaringType}.Concat(createDelegateMethod.GetParameters().Select(x => x.ParameterType)).ToArray();
             var dynamicMethod = new DynamicMethod(createDelegateMethod.Name + "_" + Guid.NewGuid(), createDelegateMethod.ReturnType, parameterTypes, typeof(DynamicMethod), true);
 
-            var methodBody = MethodBody.Build(createDelegateMethod, false);
+            var methodBody = MethodBody.Read(createDelegateMethod, false);
             methodBody.TemporaryMaxStack = Math.Max(methodBody.TemporaryMaxStack, 2); // todo посчитать точнее
 
             sendToDebug("Plain", createDelegateMethod, methodBody);
@@ -394,6 +394,8 @@ namespace GroboTrace
 
             allocateForMapEntries = mapEntriesAllocator;
 
+            MethodBody.Init();
+
             HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new[] { typeof(Type), typeof(object) }, null));
             HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new[] { typeof(Type) }, null));
 
@@ -458,7 +460,7 @@ namespace GroboTrace
 
             if (output) Debug.WriteLine(".NET: method {0} is asked to be traced", method);
 
-            var methodBody = MethodBody.Build(rawMethodBody, module, new MetadataToken(methodToken), false);
+            var methodBody = MethodBody.Read(rawMethodBody, module, new MetadataToken(methodToken), false);
 
             var rawSignature = methodBody.MethodSignature;
             var methodSignature = new SignatureReader(rawSignature).ReadAndParseMethodSignature();

@@ -5,7 +5,7 @@ using System.Reflection.Emit;
 
 using GroboTrace.MethodBodyParsing;
 
-using CecilMethodBody = GroboTrace.MethodBodyParsing.MethodBody;
+using MethodBody = GroboTrace.MethodBodyParsing.MethodBody;
 using ExceptionHandler = GroboTrace.MethodBodyParsing.ExceptionHandler;
 using OpCodes = GroboTrace.MethodBodyParsing.OpCodes;
 
@@ -61,7 +61,7 @@ namespace GroboTrace
 
         private void ExtendInternal()
         {
-            var methodBody = CecilMethodBody.Build(dynamicMethod, false);
+            var methodBody = MethodBody.Read(dynamicMethod, false);
 
             bool output = true;
 
@@ -117,7 +117,7 @@ namespace GroboTrace
             return null;
         }
 
-        private void AddLocalVariables(CecilMethodBody methodBody)
+        private void AddLocalVariables(MethodBody methodBody)
         {
             var rawSignature = methodBody.MethodSignature;
 
@@ -131,7 +131,7 @@ namespace GroboTrace
             ticksLocalIndex = methodBody.AddLocalVariable(typeof(long)).LocalIndex;
         }
 
-        private void ModifyMethodBody(CecilMethodBody methodBody, DynamicILInfo newDynamicILInfo, int functionId)
+        private void ModifyMethodBody(MethodBody methodBody, DynamicILInfo newDynamicILInfo, int functionId)
         {
             Zzz.ReplaceRetInstructions(methodBody.Instructions, hasReturnType, resultLocalIndex);
 

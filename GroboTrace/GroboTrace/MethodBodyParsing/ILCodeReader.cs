@@ -10,6 +10,12 @@ namespace GroboTrace.MethodBodyParsing
             this.codeSize = codeSize;
         }
 
+        public static void Read(byte[] buffer, MethodBody body)
+        {
+            fixed(byte* b = &buffer[0])
+                new ILCodeReader(b, buffer.Length).Read(body);
+        }
+
         public void Read(MethodBody body)
         {
             this.body = body;

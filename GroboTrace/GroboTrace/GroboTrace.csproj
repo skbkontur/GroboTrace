@@ -61,6 +61,7 @@
     <Compile Include="Injection\MethodUtil.cs" />
     <Compile Include="MethodBodyParsing\CycleFinderWithoutRecursion.cs" />
     <Compile Include="MethodBodyParsing\ExceptionsInfoReader.cs" />
+    <Compile Include="MethodBodyParsing\FieldsExtractor.cs" />
     <Compile Include="MethodBodyParsing\ILCodeReader.cs" />
     <Compile Include="MethodCallNode.cs" />
     <Compile Include="MethodCallTree.cs" />
