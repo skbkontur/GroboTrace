@@ -50,7 +50,7 @@ namespace GroboTrace
                 {
                     MethodStats = new MethodStats
                         {
-                            Method = Zzz.GetMethod(MethodId),
+                            Method = MethodBaseTracingInstaller.GetMethod(MethodId),
                             Calls = Calls,
                             Ticks = Ticks,
                             Percent = totalTicks == 0 ? 0.0 : Ticks * 100.0 / totalTicks
@@ -72,7 +72,7 @@ namespace GroboTrace
                 child.GetStats(statsDict);
                 selfTicks -= child.Ticks;
             }
-            var method = Zzz.GetMethod(MethodId);
+            var method = MethodBaseTracingInstaller.GetMethod(MethodId);
             method = method.IsGenericMethod ? ((MethodInfo)method).GetGenericMethodDefinition() : method;
             MethodStats stats;
             if(!statsDict.TryGetValue(method, out stats))

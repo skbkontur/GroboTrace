@@ -352,11 +352,11 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			init(static_cast<void*>(&GetTokenFromSig), static_cast<void*>(&CoTaskMemAlloc));
 			DebugOutput(L"Successfully called 'Init' method");
 
-			procAddr = GetProcAddress(groboTrace, "Trace");
+			procAddr = GetProcAddress(groboTrace, "InstallTracing");
 			if (!procAddr)
-				DebugOutput(L"Failed to obtain 'Trace' method addr");
+				DebugOutput(L"Failed to obtain 'InstallTracing' method addr");
 			else
-				DebugOutput(L"Successfully got 'Trace' method addr");
+				DebugOutput(L"Successfully got 'InstallTracing' method addr");
 			callback = reinterpret_cast<SharpResponse(*)(WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
 		}
 		LeaveCriticalSection(&criticalSection);

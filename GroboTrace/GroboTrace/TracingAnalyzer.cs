@@ -56,7 +56,7 @@ namespace GroboTrace
 
         public static Stats GetStats()
         {
-            var ticks = Zzz.TicksReader();
+            var ticks = MethodBaseTracingInstaller.TicksReader();
             var localTree = GetTree();
             return new Stats
             {

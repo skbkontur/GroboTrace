@@ -13,7 +13,7 @@
 //        [Test]
 //        public void Test_zzz()
 //        {
-//            var sig = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("getMethodBase", BindingFlags.Public | BindingFlags.Static).MetadataToken);
+//            var sig = typeof(MethodBaseTracingInstaller).Module.ResolveSignature(typeof(MethodBaseTracingInstaller).GetMethod("getMethodBase", BindingFlags.Public | BindingFlags.Static).MetadataToken);
 //            Console.WriteLine(sig);
 //        }
 //

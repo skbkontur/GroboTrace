@@ -55,10 +55,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DynamicMethodExtender.cs" />
+    <Compile Include="DynamicMethodTracingInstaller.cs" />
     <Compile Include="IClassWrapper.cs" />
     <Compile Include="Injection\FrameworkVersions.cs" />
     <Compile Include="Injection\MethodUtil.cs" />
+    <Compile Include="MetadataExtensions.cs" />
     <Compile Include="MethodBodyParsing\CycleFinderWithoutRecursion.cs" />
     <Compile Include="MethodBodyParsing\DynamicILGenerator.cs" />
     <Compile Include="MethodBodyParsing\DynamicILInfoWrapper.cs" />
@@ -103,7 +104,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Stats.cs" />
     <Compile Include="TracingAnalyzer.cs" />
-    <Compile Include="Zzz.cs" />
+    <Compile Include="MethodBaseTracingInstaller.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

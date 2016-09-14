@@ -29,8 +29,8 @@ namespace Benchmarks
         [Benchmark]
         public long Ethalon()
         {
-            var start = Zzz.TicksReader();
-            var end = Zzz.TicksReader();
+            var start = MethodBaseTracingInstaller.TicksReader();
+            var end = MethodBaseTracingInstaller.TicksReader();
             return end - start;
         }
 
@@ -43,7 +43,7 @@ namespace Benchmarks
         [Setup]
         public void Setup()
         {
-            Zzz.TicksReader();
+            MethodBaseTracingInstaller.TicksReader();
             var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(void), Type.EmptyTypes, typeof(string), true);
             method.GetILGenerator().Emit(OpCodes.Ret);
             action = (Action)method.CreateDelegate(typeof(Action));

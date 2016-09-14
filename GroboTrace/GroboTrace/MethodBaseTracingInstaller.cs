@@ -22,97 +22,6 @@ using OpCodes = GroboTrace.MethodBodyParsing.OpCodes;
 
 namespace GroboTrace
 {
-    public static class MetadataExtensions
-    {
-        private static readonly Type __canon = typeof(object).Assembly.GetTypes().First(t => t.FullName == "System.__Canon");
-        private static readonly Type[] universalParameters = Enumerable.Repeat(__canon, 1024).ToArray();
-
-        public static object Resolve(this Module module, MetadataToken token)
-        {
-            switch (token.TokenType)
-            {
-                case TokenType.Method:
-                case TokenType.MethodSpec:
-                    return module.ResolveMethod(token.ToInt32(), universalParameters, universalParameters);
-                case TokenType.MemberRef:
-                    return module.ResolveMember(token.ToInt32(), universalParameters, universalParameters);
-                case TokenType.Field:
-                    return module.ResolveField(token.ToInt32(), universalParameters, universalParameters);
-                case TokenType.TypeDef:
-                case TokenType.TypeRef:
-                    return module.ResolveType(token.ToInt32(), universalParameters, universalParameters);
-                case TokenType.Signature:
-                    return module.ResolveSignature(token.ToInt32());
-                case TokenType.String:
-                    return module.ResolveString(token.ToInt32());
-                default:
-                    throw new NotSupportedException();
-            }
-        }
-
-        public static MethodBase ResolveMethod(Module module, MetadataToken token)
-        {
-            switch (token.TokenType)
-            {
-                case TokenType.MethodSpec:
-                case TokenType.Method:
-                    return module.ResolveMethod(token.ToInt32(), universalParameters, universalParameters);
-                case TokenType.MemberRef:
-                    var member = module.ResolveMember(token.ToInt32(), universalParameters, universalParameters);
-                    switch (member.MemberType)
-                    {
-                        case MemberTypes.Constructor:
-                        case MemberTypes.Method:
-                            return (MethodBase)member;
-                        default:
-                            return null;
-                    }
-                default:
-                    return null;
-            }
-        }
-
-        public static SignatureHelper BuildMemberRefSignature(MethodBase methodBase)
-        {
-            return BuildMemberRefSignature(methodBase.CallingConvention,
-                                           GetReturnType(methodBase),
-                                           methodBase.GetParameters().Select(p => p.ParameterType).ToArray(),
-                                           null);
-        }
-
-        private static SignatureHelper BuildMemberRefSignature(
-            CallingConventions call,
-            Type returnType,
-            Type[] parameterTypes,
-            Type[] optionalParameterTypes)
-        {
-            var sig = SignatureHelper.GetMethodSigHelper(call, returnType);
-            if (parameterTypes != null)
-            {
-                foreach (var parameterType in parameterTypes)
-                    sig.AddArgument(parameterType);
-            }
-            if (optionalParameterTypes != null && optionalParameterTypes.Length != 0)
-            {
-                // add the sentinel 
-                sig.AddSentinel();
-                foreach (var optionalParameterType in optionalParameterTypes)
-                    sig.AddArgument(optionalParameterType);
-            }
-            return sig;
-        }
-
-        private static Type GetReturnType(MethodBase methodBase)
-        {
-            var methodInfo = methodBase as MethodInfo;
-            if (methodInfo != null)
-                return methodInfo.ReturnType;
-            if (methodBase is ConstructorInfo)
-                return typeof(void);
-            throw new InvalidOperationException(string.Format("{0} is not supported", methodBase.GetType()));
-        }
-    }
-
     public static class Extensions
     {
         public static Type GetDelegateType(Type[] parameterTypes, Type returnType)
@@ -176,9 +85,9 @@ namespace GroboTrace
         public uint mapEntriesCount;
     }
 
-    public static unsafe class Zzz
+    public static unsafe class MethodBaseTracingInstaller
     {
-        static Zzz()
+        static MethodBaseTracingInstaller()
         {
             sizes = new int[32];
             counts = new int[32];
@@ -198,14 +107,13 @@ namespace GroboTrace
             }
 
             EmitTicksReader();
-            getMethodBaseFunctionAddress = typeof(Zzz).GetMethod("getMethodBase", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
             methodStartedAddress = typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
             methodFinishedAddress = typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
 
             //Console.ReadLine();
         }
 
-        internal static ConcurrentDictionary<MethodBase, int> tracedMethods = new ConcurrentDictionary<MethodBase, int>();
+        internal static readonly ConcurrentDictionary<MethodBase, int> tracedMethods = new ConcurrentDictionary<MethodBase, int>();
 
         public static long TemplateForTicksSignature()
         {
@@ -226,7 +134,7 @@ namespace GroboTrace
 
             sendToDebug("Plain", createDelegateMethod, methodBody);
 
-            var traceMethod = typeof(DynamicMethodExtender).GetMethod("Trace", BindingFlags.Static | BindingFlags.Public);
+            var traceMethod = typeof(DynamicMethodTracingInstaller).GetMethod("InstallTracing", BindingFlags.Static | BindingFlags.Public);
 
             int startIndex = 0;
 
@@ -234,12 +142,6 @@ namespace GroboTrace
             methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Call, traceMethod));
 
             methodBody.WriteToDynamicMethod(dynamicMethod, Math.Max(methodBody.MaxStack, 2));
-
-            //var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
-
-//            var methodBody2 = MethodBody.Build(methodBody.GetILAsByteArray(), stackSize, dynamicMethod.InitLocals, localSignature, methodBody.GetExceptionsAsByteArray());
-//
-//            sendToDebug("Changed", createDelegateMethod, methodBody2);
 
             createDelegateMethods.Add(dynamicMethod.CreateDelegate(Extensions.GetDelegateType(parameterTypes, createDelegateMethod.ReturnType)));
 
@@ -286,7 +188,6 @@ namespace GroboTrace
                     *pointer++ = *pp++;
             }
 
-            //TicksReader = (TicksReaderDelegate)Marshal.GetDelegateForFunctionPointer(ticksReaderAddress, typeof(TicksReaderDelegate));
             var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(long), Type.EmptyTypes, typeof(string), true);
             var il = method.GetILGenerator();
             if(IntPtr.Size == 8)
@@ -332,7 +233,7 @@ namespace GroboTrace
         }
 
         [DllExport]
-        public static SharpResponse Trace(
+        public static SharpResponse InstallTracing(
             [MarshalAs(UnmanagedType.LPWStr)] string assemblyName,
             [MarshalAs(UnmanagedType.LPWStr)] string moduleName,
             UIntPtr moduleId,
@@ -433,7 +334,7 @@ namespace GroboTrace
 
             var endInstructionBeforeModifying = ReplaceRetInstructions(methodBody.Instructions, resultLocalIndex >= 0, resultLocalIndex);
 
-            var ticksReaderSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
+            var ticksReaderSignature = typeof(MethodBaseTracingInstaller).Module.ResolveSignature(typeof(MethodBaseTracingInstaller).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
             var ticksReaderToken = signatureTokenBuilder(moduleId, ticksReaderSignature);
 
             var methodStartedSignature = typeof(TracingAnalyzer).Module.ResolveSignature(typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MetadataToken);
@@ -446,7 +347,7 @@ namespace GroboTrace
 
             if(method.IsConstructor)
             {
-                // Skip call to ::base() or ::this()
+                // Skip code before the call to ::base() or ::this()
                 var declaringType = method.DeclaringType;
                 if(declaringType != null)
                 {
@@ -650,11 +551,6 @@ namespace GroboTrace
             Debug.WriteLine("");
         }
 
-        public static object getMethodBase(int i, int j)
-        {
-            return methods[i][j];
-        }
-
         public static MethodBase GetMethod(int id)
         {
             if(id == 0) return null;
@@ -673,7 +569,6 @@ namespace GroboTrace
 
         public static IntPtr ticksReaderAddress;
         public static Func<long> TicksReader;
-        public static IntPtr getMethodBaseFunctionAddress;
         public static IntPtr methodStartedAddress;
         public static IntPtr methodFinishedAddress;
 

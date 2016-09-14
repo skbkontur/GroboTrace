@@ -5,46 +5,39 @@ using System.Reflection.Emit;
 
 using GroboTrace.MethodBodyParsing;
 
-using MethodBody = GroboTrace.MethodBodyParsing.MethodBody;
 using ExceptionHandler = GroboTrace.MethodBodyParsing.ExceptionHandler;
+using MethodBody = GroboTrace.MethodBodyParsing.MethodBody;
 using OpCodes = GroboTrace.MethodBodyParsing.OpCodes;
 
 namespace GroboTrace
 {
-    public class DynamicMethodExtender
+    public class DynamicMethodTracingInstaller
     {
-        public static void Trace(DynamicMethod dynamicMethod)
-        {
-            new DynamicMethodExtender(dynamicMethod).Extend();
-        }
-
-        private DynamicMethodExtender(DynamicMethod dynamicMethod)
+        private DynamicMethodTracingInstaller(DynamicMethod dynamicMethod)
         {
             this.dynamicMethod = dynamicMethod;
             hasReturnType = dynamicMethod.ReturnType != typeof(void);
 
-            mscorlib = typeof(DynamicMethod).Assembly;
-            t_DynamicResolver = mscorlib.GetType("System.Reflection.Emit.DynamicResolver");
-            t_DynamicILInfo = mscorlib.GetType("System.Reflection.Emit.DynamicILInfo");
-            t_DynamicILGenerator = mscorlib.GetType("System.Reflection.Emit.DynamicILGenerator");
-            t_DynamicMethod = mscorlib.GetType("System.Reflection.Emit.DynamicMethod");
-            t_DynamicScope = mscorlib.GetType("System.Reflection.Emit.DynamicScope");
-
-            ticksReaderAddress = Zzz.ticksReaderAddress;
-            methodStartedAddress = Zzz.methodStartedAddress;
-            methodFinishedAddress = Zzz.methodFinishedAddress;
+            ticksReaderAddress = MethodBaseTracingInstaller.ticksReaderAddress;
+            methodStartedAddress = MethodBaseTracingInstaller.methodStartedAddress;
+            methodFinishedAddress = MethodBaseTracingInstaller.methodFinishedAddress;
         }
 
-        private void Extend()
+        public static void InstallTracing(DynamicMethod dynamicMethod)
         {
-            if(Zzz.tracedMethods.ContainsKey(dynamicMethod))
+            new DynamicMethodTracingInstaller(dynamicMethod).Install();
+        }
+
+        private void Install()
+        {
+            if(MethodBaseTracingInstaller.tracedMethods.ContainsKey(dynamicMethod))
                 return;
             lock(dynamicMethod)
             {
-                if(Zzz.tracedMethods.ContainsKey(dynamicMethod))
+                if(MethodBaseTracingInstaller.tracedMethods.ContainsKey(dynamicMethod))
                     return;
                 ExtendInternal();
-                Zzz.tracedMethods.TryAdd(dynamicMethod, 0);
+                MethodBaseTracingInstaller.tracedMethods.TryAdd(dynamicMethod, 0);
             }
         }
 
@@ -55,11 +48,11 @@ namespace GroboTrace
             bool output = true;
 
             if(output) Debug.WriteLine("");
-            if (output) Debug.WriteLine("Initial methodBody of DynamicMethod");
-            if (output) Debug.WriteLine(methodBody);
+            if(output) Debug.WriteLine("Initial methodBody of DynamicMethod");
+            if(output) Debug.WriteLine(methodBody);
 
             var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
-            if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
+            if(output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
             if(!methodContainsCycles && methodBody.Instructions.Count < 50)
             {
@@ -70,15 +63,15 @@ namespace GroboTrace
             AddLocalVariables(methodBody);
 
             int functionId;
-            Zzz.AddMethod(dynamicMethod, out functionId);
+            MethodBaseTracingInstaller.AddMethod(dynamicMethod, out functionId);
 
             ModifyMethodBody(methodBody, functionId);
 
             methodBody.WriteToDynamicMethod(dynamicMethod, Math.Max(methodBody.MaxStack, 3));
 
-            if (output) Debug.WriteLine("");
-            if (output) Debug.WriteLine("Changed methodBody of DynamicMethod");
-            if (output) Debug.WriteLine(methodBody);
+            if(output) Debug.WriteLine("");
+            if(output) Debug.WriteLine("Changed methodBody of DynamicMethod");
+            if(output) Debug.WriteLine(methodBody);
         }
 
         private void AddLocalVariables(MethodBody methodBody)
@@ -86,20 +79,18 @@ namespace GroboTrace
             var rawSignature = methodBody.MethodSignature;
 
             var methodSignature = new SignatureReader(rawSignature).ReadAndParseMethodSignature();
-            
-            if (hasReturnType)
-            {
+
+            if(hasReturnType)
                 resultLocalIndex = methodBody.AddLocalVariable(methodSignature.ReturnTypeSignature).LocalIndex;
-            }
 
             ticksLocalIndex = methodBody.AddLocalVariable(typeof(long)).LocalIndex;
         }
 
         private void ModifyMethodBody(MethodBody methodBody, int functionId)
         {
-            Zzz.ReplaceRetInstructions(methodBody.Instructions, hasReturnType, resultLocalIndex);
+            MethodBaseTracingInstaller.ReplaceRetInstructions(methodBody.Instructions, hasReturnType, resultLocalIndex);
 
-            var ticksReaderSignature = typeof(Zzz).Module.ResolveSignature(typeof(Zzz).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
+            var ticksReaderSignature = typeof(MethodBaseTracingInstaller).Module.ResolveSignature(typeof(MethodBaseTracingInstaller).GetMethod("TemplateForTicksSignature", BindingFlags.Public | BindingFlags.Static).MetadataToken);
 
             var methodStartedSignature = typeof(TracingAnalyzer).Module.ResolveSignature(typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MetadataToken);
 
@@ -133,15 +124,13 @@ namespace GroboTrace
 
             Instruction finallyEndInstruction;
 
-            if (resultLocalIndex >= 0)
+            if(resultLocalIndex >= 0)
             {
                 methodBody.Instructions.Insert(methodBody.Instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ldloc, resultLocalIndex));
                 methodBody.Instructions.Insert(methodBody.Instructions.Count, Instruction.Create(OpCodes.Ret));
             }
             else
-            {
                 methodBody.Instructions.Insert(methodBody.Instructions.Count, finallyEndInstruction = Instruction.Create(OpCodes.Ret));
-            }
 
             ExceptionHandler newException = new ExceptionHandler(ExceptionHandlerType.Finally);
             newException.TryStart = tryStartInstruction;
@@ -153,23 +142,13 @@ namespace GroboTrace
 
             methodBody.ExceptionHandlers.Add(newException);
         }
-        
 
-        private DynamicMethod dynamicMethod;
-        private bool hasReturnType;
-
-        private Assembly mscorlib;
-        private readonly Type t_DynamicResolver;
-        private readonly Type t_DynamicILInfo;
-        private readonly Type t_DynamicILGenerator;
-        private readonly Type t_DynamicMethod;
-        private readonly Type t_DynamicScope;
-
+        private readonly DynamicMethod dynamicMethod;
+        private readonly bool hasReturnType;
 
         private static IntPtr ticksReaderAddress;
         private static IntPtr methodStartedAddress;
         private static IntPtr methodFinishedAddress;
-
 
         int resultLocalIndex = -1;
         int ticksLocalIndex;
