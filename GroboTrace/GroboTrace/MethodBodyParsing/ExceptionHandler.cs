@@ -38,7 +38,7 @@ namespace GroboTrace.MethodBodyParsing
 
         public Instruction HandlerEnd { get; set; }
 
-        public MetadataToken CatchType { get; set; }
+        public object CatchType { get; set; }
 
         public ExceptionHandlerType HandlerType { get; set; }
 

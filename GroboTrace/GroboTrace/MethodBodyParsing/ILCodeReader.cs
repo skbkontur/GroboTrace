@@ -4,16 +4,18 @@ namespace GroboTrace.MethodBodyParsing
 {
     internal sealed unsafe class ILCodeReader : UnmanagedByteBuffer
     {
-        public ILCodeReader(byte* buffer, int codeSize)
+        public ILCodeReader(byte* buffer, int codeSize, Func<MetadataToken, object> tokenResolver, bool resolveTokens)
             : base(buffer)
         {
             this.codeSize = codeSize;
+            this.tokenResolver = tokenResolver;
+            this.resolveTokens = resolveTokens;
         }
 
-        public static void Read(byte[] buffer, MethodBody body)
+        public static void Read(byte[] buffer, Func<MetadataToken, object> tokenResolver, bool resolveTokens, MethodBody body)
         {
             fixed(byte* b = &buffer[0])
-                new ILCodeReader(b, buffer.Length).Read(body);
+                new ILCodeReader(b, buffer.Length, tokenResolver, resolveTokens).Read(body);
         }
 
         public void Read(MethodBody body)
@@ -132,12 +134,15 @@ namespace GroboTrace.MethodBodyParsing
             return body.Instructions.GetInstruction(offset);
         }
 
-        private MetadataToken ReadToken()
+        private object ReadToken()
         {
-            return new MetadataToken(ReadUInt32());
+            var token = new MetadataToken(ReadUInt32());
+            return resolveTokens ? tokenResolver(token) : token;
         }
 
         private readonly int codeSize;
+        private readonly Func<MetadataToken, object> tokenResolver;
+        private readonly bool resolveTokens;
         private MethodBody body;
     }
 }

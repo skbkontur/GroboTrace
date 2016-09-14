@@ -4,15 +4,17 @@ namespace GroboTrace.MethodBodyParsing
 {
     internal sealed unsafe class ExceptionsInfoReader : UnmanagedByteBuffer
     {
-        public ExceptionsInfoReader(byte* buffer)
+        public ExceptionsInfoReader(byte* buffer, Func<MetadataToken, object> tokenResolver, bool resolveTokens)
             : base(buffer)
         {
+            this.tokenResolver = tokenResolver;
+            this.resolveTokens = resolveTokens;
         }
 
-        public static void Read(byte[] buffer, MethodBody body)
+        public static void Read(byte[] buffer, Func<MetadataToken, object> tokenResolver, bool resolveTokens, MethodBody body)
         {
-            fixed (byte* b = &buffer[0])
-                new ExceptionsInfoReader(b).Read(body);
+            fixed(byte* b = &buffer[0])
+                new ExceptionsInfoReader(b, tokenResolver, resolveTokens).Read(body);
         }
 
         public void Read(MethodBody body)
@@ -99,10 +101,14 @@ namespace GroboTrace.MethodBodyParsing
             return body.Instructions.GetInstruction(offset);
         }
 
-        private MetadataToken ReadToken()
+        private object ReadToken()
         {
-            return new MetadataToken(ReadUInt32());
+            var token = new MetadataToken(ReadUInt32());
+            return resolveTokens ? tokenResolver(token) : token;
         }
+
+        private readonly Func<MetadataToken, object> tokenResolver;
+        private readonly bool resolveTokens;
 
         private MethodBody body;
     }

@@ -2,22 +2,20 @@
 
 namespace GroboTrace.MethodBodyParsing
 {
-    internal sealed class ExceptionsBaker: ByteBuffer
+    internal sealed class ExceptionsBaker : ByteBuffer
     {
-        public ExceptionsBaker(Collection<ExceptionHandler> exceptionHandlers, Collection<Instruction> instructions)
+        public ExceptionsBaker(Collection<ExceptionHandler> exceptionHandlers, Collection<Instruction> instructions, Func<OpCode, object, MetadataToken> tokenBuilder)
             : base(0)
         {
             handlers = exceptionHandlers;
             this.instructions = instructions;
+            this.tokenBuilder = tokenBuilder;
         }
 
         public byte[] BakeExceptions()
         {
-            if (handlers.IsNullOrEmpty())
+            if(handlers.IsNullOrEmpty())
                 return Empty<byte>.Array;
-
-            //instructions.SimplifyMacros();
-            //instructions.OptimizeMacros();
 
             WriteExceptions();
 
@@ -28,7 +26,7 @@ namespace GroboTrace.MethodBodyParsing
 
         private void WriteExceptions()
         {
-            if (handlers.Count < 0x15 && !RequiresFatSection(handlers))
+            if(handlers.Count < 0x15 && !RequiresFatSection(handlers))
                 WriteSmallSection();
             else
                 WriteFatSection();
@@ -36,16 +34,16 @@ namespace GroboTrace.MethodBodyParsing
 
         private static bool RequiresFatSection(Collection<ExceptionHandler> handlers)
         {
-            foreach (var handler in handlers)
+            foreach(var handler in handlers)
             {
-                if (IsFatRange(handler.TryStart, handler.TryEnd))
+                if(IsFatRange(handler.TryStart, handler.TryEnd))
                     return true;
 
-                if (IsFatRange(handler.HandlerStart, handler.HandlerEnd))
+                if(IsFatRange(handler.HandlerStart, handler.HandlerEnd))
                     return true;
 
-                if (handler.HandlerType == ExceptionHandlerType.Filter
-                    && IsFatRange(handler.FilterStart, handler.HandlerStart))
+                if(handler.HandlerType == ExceptionHandlerType.Filter
+                   && IsFatRange(handler.FilterStart, handler.HandlerStart))
                     return true;
             }
 
@@ -54,10 +52,10 @@ namespace GroboTrace.MethodBodyParsing
 
         private static bool IsFatRange(Instruction start, Instruction end)
         {
-            if (start == null)
+            if(start == null)
                 throw new ArgumentException();
 
-            if (end == null)
+            if(end == null)
                 return true;
 
             return end.Offset - start.Offset > 255 || start.Offset > 65535;
@@ -93,7 +91,7 @@ namespace GroboTrace.MethodBodyParsing
 
         private void WriteExceptionHandlers(Action<int> writeEntry, Action<int> writeLength)
         {
-            foreach (var handler in handlers)
+            foreach(var handler in handlers)
             {
                 writeEntry((int)handler.HandlerType);
 
@@ -109,23 +107,23 @@ namespace GroboTrace.MethodBodyParsing
 
         private void WriteExceptionHandlerSpecific(ExceptionHandler handler)
         {
-            switch (handler.HandlerType)
+            switch(handler.HandlerType)
             {
-                case ExceptionHandlerType.Catch:
-                    WriteMetadataToken(handler.CatchType);
-                    break;
-                case ExceptionHandlerType.Filter:
-                    WriteInt32(handler.FilterStart.Offset);
-                    break;
-                default:
-                    WriteInt32(0);
-                    break;
+            case ExceptionHandlerType.Catch:
+                WriteMetadataToken(tokenBuilder(default(OpCode), handler.CatchType));
+                break;
+            case ExceptionHandlerType.Filter:
+                WriteInt32(handler.FilterStart.Offset);
+                break;
+            default:
+                WriteInt32(0);
+                break;
             }
         }
 
         private int GetTargetOffset(Instruction instruction)
         {
-            if (instruction == null)
+            if(instruction == null)
             {
                 var last = instructions[instructions.size - 1];
                 return last.Offset + last.GetSize();
@@ -140,6 +138,7 @@ namespace GroboTrace.MethodBodyParsing
         }
 
         private readonly Collection<Instruction> instructions;
+        private readonly Func<OpCode, object, MetadataToken> tokenBuilder;
         private readonly Collection<ExceptionHandler> handlers;
     }
 }

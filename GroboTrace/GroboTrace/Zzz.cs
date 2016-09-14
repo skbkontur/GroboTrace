@@ -25,8 +25,30 @@ namespace GroboTrace
     public static class MetadataExtensions
     {
         private static readonly Type __canon = typeof(object).Assembly.GetTypes().First(t => t.FullName == "System.__Canon");
-        // todo rename
-        private static readonly Type[] __canons = Enumerable.Repeat(__canon, 1024).ToArray();
+        private static readonly Type[] universalParameters = Enumerable.Repeat(__canon, 1024).ToArray();
+
+        public static object Resolve(this Module module, MetadataToken token)
+        {
+            switch (token.TokenType)
+            {
+                case TokenType.Method:
+                case TokenType.MethodSpec:
+                    return module.ResolveMethod(token.ToInt32(), universalParameters, universalParameters);
+                case TokenType.MemberRef:
+                    return module.ResolveMember(token.ToInt32(), universalParameters, universalParameters);
+                case TokenType.Field:
+                    return module.ResolveField(token.ToInt32(), universalParameters, universalParameters);
+                case TokenType.TypeDef:
+                case TokenType.TypeRef:
+                    return module.ResolveType(token.ToInt32(), universalParameters, universalParameters);
+                case TokenType.Signature:
+                    return module.ResolveSignature(token.ToInt32());
+                case TokenType.String:
+                    return module.ResolveString(token.ToInt32());
+                default:
+                    throw new NotSupportedException();
+            }
+        }
 
         public static MethodBase ResolveMethod(Module module, MetadataToken token)
         {
@@ -34,9 +56,9 @@ namespace GroboTrace
             {
                 case TokenType.MethodSpec:
                 case TokenType.Method:
-                    return module.ResolveMethod(token.ToInt32(), __canons, __canons);
+                    return module.ResolveMethod(token.ToInt32(), universalParameters, universalParameters);
                 case TokenType.MemberRef:
-                    var member = module.ResolveMember(token.ToInt32(), __canons, __canons);
+                    var member = module.ResolveMember(token.ToInt32(), universalParameters, universalParameters);
                     switch (member.MemberType)
                     {
                         case MemberTypes.Constructor:
@@ -48,6 +70,46 @@ namespace GroboTrace
                 default:
                     return null;
             }
+        }
+
+        public static SignatureHelper BuildMemberRefSignature(MethodBase methodBase)
+        {
+            return BuildMemberRefSignature(methodBase.CallingConvention,
+                                           GetReturnType(methodBase),
+                                           methodBase.GetParameters().Select(p => p.ParameterType).ToArray(),
+                                           null);
+        }
+
+        private static SignatureHelper BuildMemberRefSignature(
+            CallingConventions call,
+            Type returnType,
+            Type[] parameterTypes,
+            Type[] optionalParameterTypes)
+        {
+            var sig = SignatureHelper.GetMethodSigHelper(call, returnType);
+            if (parameterTypes != null)
+            {
+                foreach (var parameterType in parameterTypes)
+                    sig.AddArgument(parameterType);
+            }
+            if (optionalParameterTypes != null && optionalParameterTypes.Length != 0)
+            {
+                // add the sentinel 
+                sig.AddSentinel();
+                foreach (var optionalParameterType in optionalParameterTypes)
+                    sig.AddArgument(optionalParameterType);
+            }
+            return sig;
+        }
+
+        private static Type GetReturnType(MethodBase methodBase)
+        {
+            var methodInfo = methodBase as MethodInfo;
+            if (methodInfo != null)
+                return methodInfo.ReturnType;
+            if (methodBase is ConstructorInfo)
+                return typeof(void);
+            throw new InvalidOperationException(string.Format("{0} is not supported", methodBase.GetType()));
         }
     }
 
@@ -150,115 +212,6 @@ namespace GroboTrace
             return 0L;
         }
 
-        private static SignatureHelper BuildMemberRefSignature(
-            CallingConventions call,
-            Type returnType,
-            Type[] parameterTypes,
-            Type[] optionalParameterTypes)
-        {
-            var sig = SignatureHelper.GetMethodSigHelper(call, returnType);
-            if(parameterTypes != null)
-            {
-                foreach(var parameterType in parameterTypes)
-                    sig.AddArgument(parameterType);
-            }
-            if(optionalParameterTypes != null && optionalParameterTypes.Length != 0)
-            {
-                // add the sentinel 
-                sig.AddSentinel();
-                foreach(var optionalParameterType in optionalParameterTypes)
-                    sig.AddArgument(optionalParameterType);
-            }
-            return sig;
-        }
-
-        private static Type GetReturnType(MethodBase methodBase)
-        {
-            var methodInfo = methodBase as MethodInfo;
-            if(methodInfo != null)
-                return methodInfo.ReturnType;
-            if(methodBase is ConstructorInfo)
-                return typeof(void);
-            throw new InvalidOperationException("TODO");
-        }
-
-        private static SignatureHelper BuildMemberRefSignature(MethodBase methodBase)
-        {
-            return BuildMemberRefSignature(methodBase.CallingConvention,
-                                           GetReturnType(methodBase),
-                                           methodBase.GetParameters().Select(p => p.ParameterType).ToArray(),
-                                           null);
-        }
-
-        private static Func<DynamicILInfo, MethodBase, int> EmitMemberRefTokenBuilder()
-        {
-            var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(int),
-                                           new[] {typeof(DynamicILInfo), typeof(MethodBase)}, typeof(string), true);
-            var il = method.GetILGenerator();
-            var types = typeof(DynamicMethod).Assembly.GetTypes();
-            var t_VarArgsMethod = types.First(t => t.FullName == "System.Reflection.Emit.VarArgMethod");
-            var t_RuntimeMethodInfo = types.First(t => t.FullName == "System.Reflection.RuntimeMethodInfo");
-            var t_DynamicScope = types.First(t => t.FullName == "System.Reflection.Emit.DynamicScope");
-            var constructor = t_VarArgsMethod.GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null, new[] {t_RuntimeMethodInfo, typeof(SignatureHelper)}, null);
-            var scopeField = typeof(DynamicILInfo).GetField("m_scope", BindingFlags.Instance | BindingFlags.NonPublic);
-            var getTokenForMethod = t_DynamicScope.GetMethod("GetTokenFor", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] {t_VarArgsMethod}, null);
-
-            //return m_scope.GetTokenFor(new VarArgMethod(methodInfo as RuntimeMethodInfo, methodInfo as DynamicMethod, sig));
-
-            il.Emit(System.Reflection.Emit.OpCodes.Ldarg_0); // stack: [dynamicILInfo]
-            il.Emit(System.Reflection.Emit.OpCodes.Ldfld, scopeField); // stack: [dynamicILInfo.m_scope]
-            il.Emit(System.Reflection.Emit.OpCodes.Ldarg_1); // stack: [dynamicILInfo.m_scope, method]
-            il.Emit(System.Reflection.Emit.OpCodes.Castclass, t_RuntimeMethodInfo); // stack: [dynamicILInfo.m_scope, (RuntimeMethodInfo)method]
-            il.Emit(System.Reflection.Emit.OpCodes.Ldarg_1); // stack: [dynamicILInfo.m_scope, method, method]
-            var memberRefSignatureBuilder = typeof(Zzz).GetMethod("BuildMemberRefSignature", BindingFlags.Static | BindingFlags.NonPublic, null, new[] {typeof(MethodBase)}, null);
-            il.EmitCall(System.Reflection.Emit.OpCodes.Call, memberRefSignatureBuilder, null); // stack: [dynamicILInfo.m_scope, (RuntimeMethodInfo)method, BuildMemberRefSignature(method)]
-            il.Emit(System.Reflection.Emit.OpCodes.Newobj, constructor); // stack: [dynamicILInfo.m_scope, new VarArgsMethod((RuntimeMethodInfo)method, BuildMemberRefSignature(method))]
-            il.EmitCall(System.Reflection.Emit.OpCodes.Call, getTokenForMethod, null); // stack: [dynamicILInfo.m_scope.GetTokenFor(new VarArgsMethod((RuntimeMethodInfo)method, BuildMemberRefSignature(method)))]
-            il.Emit(System.Reflection.Emit.OpCodes.Ret);
-            return (Func<DynamicILInfo, MethodBase, int>)method.CreateDelegate(typeof(Func<DynamicILInfo, MethodBase, int>));
-        }
-
-        private static int GetTokenForMethod(DynamicILInfo dynamicILInfo, MethodBase methodBase, OpCode opcode)
-        {
-            if(opcode == OpCodes.Call || opcode == OpCodes.Callvirt)
-                return memberRefTokenBuilder(dynamicILInfo, methodBase);
-            return dynamicILInfo.GetTokenFor(methodBase.MethodHandle);
-        }
-
-        private static int GetTokenFor(DynamicILInfo dynamicILInfo, Module module, MetadataToken token, OpCode opcode)
-        {
-            switch(token.TokenType)
-            {
-            case TokenType.Method:
-                return GetTokenForMethod(dynamicILInfo, module.ResolveMethod(token.ToInt32()), opcode);
-            case TokenType.MemberRef:
-                var member = module.ResolveMember(token.ToInt32());
-                switch(member.MemberType)
-                {
-                case MemberTypes.Method:
-                case MemberTypes.Constructor:
-                    return GetTokenForMethod(dynamicILInfo, (MethodBase)member, opcode);
-                default:
-                    throw new NotSupportedException();
-                }
-            case TokenType.Field:
-                var fieldHandle = module.ResolveField(token.ToInt32()).FieldHandle;
-                return dynamicILInfo.GetTokenFor(fieldHandle);
-            case TokenType.TypeDef:
-            case TokenType.TypeRef:
-                var typeHandle = module.ResolveType(token.ToInt32()).TypeHandle;
-                return dynamicILInfo.GetTokenFor(typeHandle);
-            case TokenType.Signature:
-                var signatureBytes = module.ResolveSignature(token.ToInt32());
-                return dynamicILInfo.GetTokenFor(signatureBytes);
-            case TokenType.String:
-                var str = module.ResolveString(token.ToInt32());
-                return dynamicILInfo.GetTokenFor(str);
-            default:
-                throw new NotSupportedException();
-            }
-        }
-
         public static void HookCreateDelegate(MethodInfo createDelegateMethod)
         {
             RuntimeHelpers.PrepareMethod(createDelegateMethod.MethodHandle);
@@ -269,45 +222,20 @@ namespace GroboTrace
                 parameterTypes = new[] {createDelegateMethod.ReflectedType ?? createDelegateMethod.DeclaringType}.Concat(createDelegateMethod.GetParameters().Select(x => x.ParameterType)).ToArray();
             var dynamicMethod = new DynamicMethod(createDelegateMethod.Name + "_" + Guid.NewGuid(), createDelegateMethod.ReturnType, parameterTypes, typeof(DynamicMethod), true);
 
-            var methodBody = MethodBody.Read(createDelegateMethod, false);
-            methodBody.TemporaryMaxStack = Math.Max(methodBody.TemporaryMaxStack, 2); // todo посчитать точнее
+            var methodBody = MethodBody.Read(createDelegateMethod, true);
 
             sendToDebug("Plain", createDelegateMethod, methodBody);
 
-            var dynamicILInfo = dynamicMethod.GetDynamicILInfo();
-
-            foreach(var instruction in methodBody.Instructions)
-            {
-                if(!(instruction.Operand is MetadataToken))
-                    continue;
-
-                //Debug.WriteLine(instruction);
-
-                var token = (MetadataToken)instruction.Operand;
-
-                instruction.Operand = new MetadataToken((uint)GetTokenFor(dynamicILInfo, createDelegateMethod.Module, token, instruction.OpCode));
-
-                //Debug.WriteLine(instruction);
-            }
-
             var traceMethod = typeof(DynamicMethodExtender).GetMethod("Trace", BindingFlags.Static | BindingFlags.Public);
-            var traceToken = new MetadataToken((uint)GetTokenForMethod(dynamicILInfo, traceMethod, OpCodes.Call));
 
             int startIndex = 0;
 
             methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldarg_0));
-            methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Call, traceToken));
+            methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Call, traceMethod));
+
+            methodBody.WriteToDynamicMethod(dynamicMethod, Math.Max(methodBody.MaxStack, 2));
 
             //var reflectionMethodBodyBuilder = new ReflectionMethodBodyBuilder(methodBody);
-
-            methodBody.Seal();
-
-            dynamicILInfo.SetCode(methodBody.GetILAsByteArray(), methodBody.TemporaryMaxStack);
-
-            if(methodBody.HasExceptionHandlers)
-                dynamicILInfo.SetExceptions(methodBody.GetExceptionsAsByteArray());
-
-            dynamicILInfo.SetLocalSignature(methodBody.GetLocalSignature());
 
 //            var methodBody2 = MethodBody.Build(methodBody.GetILAsByteArray(), stackSize, dynamicMethod.InitLocals, localSignature, methodBody.GetExceptionsAsByteArray());
 //
@@ -590,16 +518,16 @@ namespace GroboTrace
 
             methodBody.ExceptionHandlers.Add(newException);
 
-            if (output) Debug.WriteLine("Initial maxStackSize = " + methodBody.TemporaryMaxStack);
+            if (output) Debug.WriteLine("Initial maxStackSize = " + methodBody.MaxStack);
             if (output) Debug.WriteLine("");
 
             methodBody.Seal();
           
-            var methodBytes = methodBody.GetFullMethodBody(module, sig => signatureTokenBuilder(moduleId, sig), Math.Max(methodBody.TemporaryMaxStack, 4));
+            var methodBytes = methodBody.GetFullMethodBody(sig => signatureTokenBuilder(moduleId, sig), Math.Max(methodBody.MaxStack, 4));
 
             if (output) sendToDebug("Changed", method, methodBody);
 
-            if (output) Debug.WriteLine("Calculated maxStackSize = " + methodBody.TemporaryMaxStack);
+            if (output) Debug.WriteLine("Calculated maxStackSize = " + methodBody.MaxStack);
             if (output) Debug.WriteLine("");
 
             var newMethodBody = (IntPtr)allocateForMethodBody(moduleId, (uint)methodBytes.Length);
@@ -740,8 +668,6 @@ namespace GroboTrace
 
             return methods[arrayIndex][adjustedIndex];
         }
-
-        private static readonly Func<DynamicILInfo, MethodBase, int> memberRefTokenBuilder = EmitMemberRefTokenBuilder();
 
         private static readonly List<Delegate> createDelegateMethods = new List<Delegate>();
 

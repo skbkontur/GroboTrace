@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Text;
 
 namespace GroboTrace.MethodBodyParsing
@@ -124,6 +125,59 @@ namespace GroboTrace.MethodBodyParsing
         {
             if(value == MetadataToken.Zero)
                 throw new ArgumentNullException("value");
+
+            return new Instruction(opcode, value);
+        }
+
+        public static Instruction Create(OpCode opcode, Type type)
+        {
+            if (type == null)
+                throw new ArgumentNullException("type");
+            if (opcode.OperandType != OperandType.InlineType &&
+                opcode.OperandType != OperandType.InlineTok)
+                throw new ArgumentException("opcode");
+
+            return new Instruction(opcode, type);
+        }
+
+        public static Instruction Create(OpCode opcode, byte[] site)
+        {
+            if (site == null)
+                throw new ArgumentNullException("site");
+            if (opcode.Code != Code.Calli)
+                throw new ArgumentException("code");
+
+            return new Instruction(opcode, site);
+        }
+
+        public static Instruction Create(OpCode opcode, MethodBase method)
+        {
+            if (method == null)
+                throw new ArgumentNullException("method");
+            if (opcode.OperandType != OperandType.InlineMethod &&
+                opcode.OperandType != OperandType.InlineTok)
+                throw new ArgumentException("opcode");
+
+            return new Instruction(opcode, method);
+        }
+
+        public static Instruction Create(OpCode opcode, FieldInfo field)
+        {
+            if (field == null)
+                throw new ArgumentNullException("field");
+            if (opcode.OperandType != OperandType.InlineField &&
+                opcode.OperandType != OperandType.InlineTok)
+                throw new ArgumentException("opcode");
+
+            return new Instruction(opcode, field);
+        }
+
+        public static Instruction Create(OpCode opcode, string value)
+        {
+            if (value == null)
+                throw new ArgumentNullException("value");
+            if (opcode.OperandType != OperandType.InlineString)
+                throw new ArgumentException("opcode");
 
             return new Instruction(opcode, value);
         }

@@ -9,26 +9,27 @@
 //
 
 using System;
-using System.Reflection;
 
 namespace GroboTrace.MethodBodyParsing
 {
-    internal sealed class MethodBodyBaker : ByteBuffer
+    internal sealed class FullMethodBodyBaker : ByteBuffer
     {
-        public MethodBodyBaker(Module module, Func<byte[], MetadataToken> signatureTokenBuilder, MethodBody body, int maxStack)
+        public FullMethodBodyBaker(MethodBody body, Func<OpCode, object, MetadataToken> tokenBuilder)
             : base(0)
         {
-            this.module = module;
-            this.signatureTokenBuilder = signatureTokenBuilder;
             this.body = body;
-            this.maxStack = maxStack;
+            this.tokenBuilder = (opCode, operand) =>
+                {
+                    if(operand is MetadataToken)
+                        return (MetadataToken)operand;
+                    if(tokenBuilder == null)
+                        throw new InvalidOperationException(string.Format("Operand {0} is not resolved to metadata token", operand));
+                    return tokenBuilder(opCode, operand);
+                };
         }
 
         public byte[] BakeMethodBody()
         {
-            //body.Instructions.SimplifyMacros();
-            //body.Instructions.OptimizeMacros();
-
             WriteMethodBody();
 
             var temp = new byte[length];
@@ -38,31 +39,21 @@ namespace GroboTrace.MethodBodyParsing
 
         private void WriteMethodBody()
         {
-            var ilCode = body.GetILAsByteArray();
+            var ilCode = new ILCodeBaker(body.Instructions, tokenBuilder).BakeILCode();
             codeSize = ilCode.Length;
 
-            var exceptions = body.GetExceptionsAsByteArray();
-
-            //body.TryCalculateMaxStackSize(module);
-            
-            if (RequiresFatHeader())
+            if(RequiresFatHeader())
                 WriteFatHeader();
             else
                 WriteByte((byte)(0x2 | (codeSize << 2))); // tiny
 
             WriteBytes(ilCode);
 
-            //WriteInstructions();
-
-            //WriteBytes(4);
-
-            if (body.HasExceptionHandlers)
+            if(body.HasExceptionHandlers)
             {
                 Align(4);
-                WriteBytes(exceptions);
+                WriteBytes(new ExceptionsBaker(body.ExceptionHandlers, body.Instructions, tokenBuilder).BakeExceptions());
             }
-
-//            Align(4);
         }
 
         private void WriteFatHeader()
@@ -75,34 +66,20 @@ namespace GroboTrace.MethodBodyParsing
 
             WriteByte(flags);
             WriteByte(0x30);
-            WriteInt16((short)maxStack);
+            WriteInt16((short)body.MaxStack);
             WriteInt32(codeSize);
-            body.LocalVarToken = GetVariablesSignature();
             WriteMetadataToken(body.LocalVarToken);
         }
 
-        private MetadataToken GetVariablesSignature()
-        {
-            if (body.LocalVariablesCount() == 0)
-                return MetadataToken.Zero;
-            var signature = body.GetLocalSignature();
-            var metadataToken = signatureTokenBuilder(signature);
-            //Debug.WriteLine(".NET: got metadata token for signature : {0}", metadataToken.ToInt32());
-            return metadataToken;
-        }
-
-        
         private bool RequiresFatHeader()
         {
             return codeSize >= 64
                    || body.InitLocals
                    || body.LocalVariablesCount() > 0
                    || body.HasExceptionHandlers
-                   || body.TemporaryMaxStack > 8;
+                   || body.MaxStack > 8;
         }
 
-        
-       
         private void WriteMetadataToken(MetadataToken token)
         {
             WriteUInt32(token.ToUInt32());
@@ -114,11 +91,8 @@ namespace GroboTrace.MethodBodyParsing
             WriteBytes(((position + align) & ~align) - position);
         }
 
-        private readonly Module module;
-        private readonly Func<byte[], MetadataToken> signatureTokenBuilder;
-
-        private MethodBody body;
-        private readonly int maxStack;
+        private readonly MethodBody body;
+        private readonly Func<OpCode, object, MetadataToken> tokenBuilder;
         private int codeSize;
     }
 }
