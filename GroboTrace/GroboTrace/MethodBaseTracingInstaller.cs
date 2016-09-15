@@ -353,7 +353,8 @@ namespace GroboTrace
                 {
                     var baseType = declaringType.BaseType ?? typeof(object);
                     var bindingFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-                    var constructors = new HashSet<int>(declaringType.GetConstructors(bindingFlags)
+                    var constructors = new HashSet<int>(
+                        declaringType.GetConstructors(bindingFlags)
                         .Concat(baseType.GetConstructors(bindingFlags))
                         .Select(c => c.MetadataToken));
                     for(int i = 0; i < methodBody.Instructions.Count; ++i)
