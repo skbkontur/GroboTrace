@@ -26,6 +26,7 @@ public:
 
 	SharpResponse(* volatile callback)(WCHAR*, WCHAR*, ModuleID, mdToken, char*, void*);
 	void(*init)(void*, void*);
+	void(*setProfilerPath)(WCHAR*);
 
 public:
     CorProfiler();

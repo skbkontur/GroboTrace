@@ -38,6 +38,9 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="GrEmit">
+      <HintPath>..\..\Assemblies\GrEmit.dll</HintPath>
+    </Reference>
     <Reference Include="ILReader.Core, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\Assemblies\ILReader.Core.dll</HintPath>
@@ -55,56 +58,18 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CycleFinderWithoutRecursion.cs" />
     <Compile Include="DynamicMethodTracingInstaller.cs" />
     <Compile Include="IClassWrapper.cs" />
-    <Compile Include="Injection\FrameworkVersions.cs" />
-    <Compile Include="Injection\MethodUtil.cs" />
-    <Compile Include="MetadataExtensions.cs" />
-    <Compile Include="MethodBodyParsing\CycleFinderWithoutRecursion.cs" />
-    <Compile Include="MethodBodyParsing\DynamicILGenerator.cs" />
-    <Compile Include="MethodBodyParsing\DynamicILInfoWrapper.cs" />
-    <Compile Include="MethodBodyParsing\DynamicMethodWrapper.cs" />
-    <Compile Include="MethodBodyParsing\DynamicResolver.cs" />
-    <Compile Include="MethodBodyParsing\DynamicScope.cs" />
-    <Compile Include="MethodBodyParsing\ExceptionsInfoReader.cs" />
-    <Compile Include="MethodBodyParsing\FieldsExtractor.cs" />
-    <Compile Include="MethodBodyParsing\ILCodeReader.cs" />
-    <Compile Include="MethodBodyParsing\MethodBodyOnDynamicILGenerator.cs" />
-    <Compile Include="MethodBodyParsing\MethodBodyOnDynamicILInfo.cs" />
-    <Compile Include="MethodBodyParsing\MethodBodyOnMethodBase.cs" />
-    <Compile Include="MethodBodyParsing\MethodBodyOnUnmanagedBuffer.cs" />
-    <Compile Include="MethodBodyParsing\MethodHeader.cs" />
-    <Compile Include="MethodBodyParsing\MethodHeaderReader.cs" />
     <Compile Include="MethodCallNode.cs" />
     <Compile Include="MethodCallTree.cs" />
     <Compile Include="MethodStats.cs" />
     <Compile Include="MethodStatsNode.cs" />
-    <Compile Include="MethodBodyParsing\ExceptionsBaker.cs" />
-    <Compile Include="MethodBodyParsing\ILCodeBaker.cs" />
-    <Compile Include="MethodBodyParsing\InstructionCollection.cs" />
-    <Compile Include="MethodBodyParsing\LocalInfo.cs" />
-    <Compile Include="MethodBodyParsing\LocalInfoCollection.cs" />
-    <Compile Include="MethodBodyParsing\LocalVarSigBuilder.cs" />
-    <Compile Include="MethodBodyParsing\MaxStackSizeCalculator.cs" />
-    <Compile Include="MethodBodyParsing\Code.cs" />
-    <Compile Include="MethodBodyParsing\FullMethodBodyBaker.cs" />
-    <Compile Include="MethodBodyParsing\ExceptionHandler.cs" />
-    <Compile Include="MethodBodyParsing\Instruction.cs" />
-    <Compile Include="MethodBodyParsing\MethodBody.cs" />
-    <Compile Include="MethodBodyParsing\MethodBodyRocks.cs" />
-    <Compile Include="MethodBodyParsing\OpCode.cs" />
-    <Compile Include="MethodBodyParsing\OpCodes.cs" />
-    <Compile Include="MethodBodyParsing\SignatureReader.cs" />
-    <Compile Include="MethodBodyParsing\ElementType.cs" />
-    <Compile Include="MethodBodyParsing\MetadataToken.cs" />
-    <Compile Include="MethodBodyParsing\TokenType.cs" />
-    <Compile Include="MethodBodyParsing\ByteBuffer.cs" />
-    <Compile Include="Collection.cs" />
-    <Compile Include="Empty.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Stats.cs" />
     <Compile Include="TracingAnalyzer.cs" />
     <Compile Include="MethodBaseTracingInstaller.cs" />
+    <Compile Include="Loader.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

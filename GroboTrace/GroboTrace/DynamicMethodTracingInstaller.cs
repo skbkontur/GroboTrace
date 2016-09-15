@@ -3,11 +3,11 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
 
-using GroboTrace.MethodBodyParsing;
+using GrEmit.MethodBodyParsing;
 
-using ExceptionHandler = GroboTrace.MethodBodyParsing.ExceptionHandler;
-using MethodBody = GroboTrace.MethodBodyParsing.MethodBody;
-using OpCodes = GroboTrace.MethodBodyParsing.OpCodes;
+using ExceptionHandler = GrEmit.MethodBodyParsing.ExceptionHandler;
+using MethodBody = GrEmit.MethodBodyParsing.MethodBody;
+using OpCodes = GrEmit.MethodBodyParsing.OpCodes;
 
 namespace GroboTrace
 {

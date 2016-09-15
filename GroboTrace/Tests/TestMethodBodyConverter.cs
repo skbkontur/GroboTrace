@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 using GrEmit;
 using GroboTrace;
-using GroboTrace.Injection;
+using GrEmit.Injection;
 
 using NUnit.Framework;
 

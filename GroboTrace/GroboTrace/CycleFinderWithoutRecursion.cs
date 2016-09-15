@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace GroboTrace.MethodBodyParsing
+using GrEmit.MethodBodyParsing;
+
+namespace GroboTrace
 {
     internal static class CycleFinderWithoutRecursion
     {

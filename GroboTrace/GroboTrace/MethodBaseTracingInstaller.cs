@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -9,16 +10,16 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-using GroboTrace.Injection;
-using GroboTrace.MethodBodyParsing;
+using GrEmit.Injection;
+using GrEmit.MethodBodyParsing;
 
 using RGiesecke.DllExport;
 
-using ExceptionHandler = GroboTrace.MethodBodyParsing.ExceptionHandler;
-using MetadataToken = GroboTrace.MethodBodyParsing.MetadataToken;
-using MethodBody = GroboTrace.MethodBodyParsing.MethodBody;
-using OpCode = GroboTrace.MethodBodyParsing.OpCode;
-using OpCodes = GroboTrace.MethodBodyParsing.OpCodes;
+using ExceptionHandler = GrEmit.MethodBodyParsing.ExceptionHandler;
+using MetadataToken = GrEmit.MethodBodyParsing.MetadataToken;
+using MethodBody = GrEmit.MethodBodyParsing.MethodBody;
+using OpCode = GrEmit.MethodBodyParsing.OpCode;
+using OpCodes = GrEmit.MethodBodyParsing.OpCodes;
 
 namespace GroboTrace
 {
@@ -107,10 +108,9 @@ namespace GroboTrace
             }
 
             EmitTicksReader();
+
             methodStartedAddress = typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
             methodFinishedAddress = typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
-
-            //Console.ReadLine();
         }
 
         internal static readonly ConcurrentDictionary<MethodBase, int> tracedMethods = new ConcurrentDictionary<MethodBase, int>();

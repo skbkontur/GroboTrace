@@ -4,6 +4,13 @@
         <name>GrEmit</name>
     </assembly>
     <members>
+        <member name="M:GrEmit.Injection.MethodUtil.GetMethodAddress(System.Reflection.MethodBase)">
+            <summary>
+                Gets the address of the method stub
+            </summary>
+            <param name="method">The method handle.</param>
+            <returns></returns>
+        </member>
         <member name="T:GrEmit.TypesAssignabilityVerificationKind">
             <summary>
             Level of verification of types compatibility
