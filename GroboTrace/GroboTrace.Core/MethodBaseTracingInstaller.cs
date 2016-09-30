@@ -12,6 +12,8 @@ using System.Threading;
 using GrEmit.Injection;
 using GrEmit.MethodBodyParsing;
 
+using GroboTrace.Api;
+
 using RGiesecke.DllExport;
 
 using ExceptionHandler = GrEmit.MethodBodyParsing.ExceptionHandler;
@@ -218,13 +220,13 @@ namespace GroboTrace.Core
 
             Debug.WriteLine(".NET: type = {0}, method = {1}", method.DeclaringType, method);
 
-            if(method.GetCustomAttribute(typeof(DontTraceAttribute), false) != null)
+            if(HasDontTraceAttribute(method))
             {
                 Debug.WriteLine(method + " is marked with DontTraceAttribute and will not be traced");
                 return response;
             }
 
-            if(method.DeclaringType != null && method.DeclaringType.GetCustomAttribute(typeof(DontTraceAttribute), false) != null)
+            if(HasDontTraceAttribute(method.DeclaringType))
             {
                 Debug.WriteLine(method + " declaring type is marked with DontTraceAttribute and will not be traced");
                 return response;
@@ -400,6 +402,11 @@ namespace GroboTrace.Core
             response.mapEntriesCount = (uint)oldOffsets.Count;
 
             return response;
+        }
+
+        private static bool HasDontTraceAttribute(MemberInfo member)
+        {
+            return member != null && member.GetCustomAttribute(typeof(DontTraceAttribute), false) != null;
         }
 
         public static void AddMethod(MethodBase method, out int functionId)

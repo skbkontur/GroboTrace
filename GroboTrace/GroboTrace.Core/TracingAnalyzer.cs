@@ -2,12 +2,10 @@
 using System.Collections.Generic;
 using System.Threading;
 
+using GroboTrace.Api;
+
 namespace GroboTrace.Core
 {
-    public class DontTraceAttribute : Attribute
-    {
-    }
-
     public static class TracingAnalyzer
     {
         private static MethodCallTree[] zzz = CreateZzz();

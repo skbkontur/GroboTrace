@@ -13,12 +13,16 @@ namespace GroboTrace.Core
     {
         private static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
         {
-            if(!args.Name.StartsWith("GrEmit,"))
-                return null;
-            if(File.Exists("GrEmit.dll"))
-                return null;
-            Debug.WriteLine("Asked to load GrEmit: " + args.Name);
-            return Assembly.LoadFrom(Path.Combine(profilerDirectory, "GrEmit.dll"));
+            foreach(var dll in dlls)
+            {
+                if(args.Name.StartsWith(dll.FullName))
+                {
+                    var dllFileName = dll.FileName;
+                    Debug.WriteLine("Asked to load {0}: {1}", dll, args.Name);
+                    return Assembly.LoadFrom(Path.Combine(profilerDirectory, dllFileName));
+                }
+            }
+            return null;
         }
 
         [DllExport(CallingConvention = CallingConvention.Cdecl)]
@@ -31,6 +35,24 @@ namespace GroboTrace.Core
             AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
         }
 
+        private static readonly DllName[] dlls =
+            {
+                new DllName("GrEmit, Version=2.1.4.0, Culture=neutral, PublicKeyToken=null", "GrEmit.dll"),
+                new DllName("GroboTrace.Api,", "GroboTrace.Api.dll"),
+            };
+
         private static string profilerDirectory;
+
+        private class DllName
+        {
+            public DllName(string fullName, string fileName)
+            {
+                FullName = fullName;
+                FileName = fileName;
+            }
+
+            public string FullName { get; private set; }
+            public string FileName { get; private set; }
+        }
     }
 }

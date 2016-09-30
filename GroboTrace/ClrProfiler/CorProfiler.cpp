@@ -350,6 +350,12 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	if (!lstrcmpW(assemblyNameBuffer, L"GroboTrace"))
 		return S_OK;
 
+	if (!lstrcmpW(assemblyNameBuffer, L"GroboTrace.Core"))
+		return S_OK;
+
+	if (!lstrcmpW(assemblyNameBuffer, L"GroboTrace.Api"))
+		return S_OK;
+
 	if (!lstrcmpW(assemblyNameBuffer, L"GrEmit"))
 		return S_OK;
 
@@ -359,9 +365,9 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	if (!lstrcmpW(assemblyNameBuffer, L"mscorlib"))
 		return S_OK;
 
-	//sprintf(str, "JIT Compilation of the method %I64d %ls.%ls\r\n", functionId, typeNameBuffer, methodNameBuffer);
+//	sprintf(str, "JIT Compilation of the method %I64d %ls.%ls\r\n", functionId, typeNameBuffer, methodNameBuffer);
 
-	//DebugOutput(str);
+//	DebugOutput(str);
 
 	if (!callback)
 	{
@@ -379,28 +385,17 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 				if (fileName[i] == '\\')
 				{
 					slashIndex = i;
-					int k = wsprintf(&fileName[i + 1], L"GroboTrace.dll");
+					int k = wsprintf(&fileName[i + 1], L"GroboTrace.Core.dll");
 					fileName[i + 1 + k] = 0;
 					break;
 				}
 
-			auto groboTrace = GetModuleHandle(L"GroboTrace.dll");
+			DebugOutput(fileName);
+			auto groboTrace = LoadLibrary(fileName);
 			if (!groboTrace)
-			{
-				groboTrace = LoadLibrary(L"GroboTrace.dll");
-				if (groboTrace)
-					DebugOutput(L"Loaded GroboTrace from victim's directory");
-				else {
-					DebugOutput(fileName);
-					auto lib = LoadLibrary(fileName);
-					if (!lib)
-						DebugOutput(L"Failed to load GroboTrace");
-					else
-						DebugOutput(L"Successfully loaded GroboTrace");
-					groboTrace = lib;
-				}
-			}
-			else DebugOutput(L"GroboTrace has already been loaded");
+				DebugOutput(L"Failed to load GroboTrace.Core");
+			else
+				DebugOutput(L"Successfully loaded GroboTrace.Core");
 
 			auto procAddr = GetProcAddress(groboTrace, "SetProfilerPath");
 			if (!procAddr)
@@ -410,7 +405,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 				DebugOutput(fileName);
 			}
 			else
-				DebugOutput(L"Successfully got 'Init' method addr");
+				DebugOutput(L"Successfully got 'SetProfilerPath' method addr");
 			setProfilerPath = reinterpret_cast<void(*)(WCHAR*)>(procAddr);
 
 			procAddr = GetProcAddress(groboTrace, "Init");

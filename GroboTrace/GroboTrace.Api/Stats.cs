@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace GroboTrace.Core
+namespace GroboTrace.Api
 {
     public class Stats
     {

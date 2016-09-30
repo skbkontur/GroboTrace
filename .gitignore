@@ -13,3 +13,5 @@ Assemblies/ClrProfiler.dll
 *.sdf
 *.opendb
 Assemblies/GroboTrace.Core.dll
+Assemblies/GroboTrace.Api.dll
+Assemblies/GroboTrace.ini

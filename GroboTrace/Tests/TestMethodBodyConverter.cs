@@ -19,6 +19,12 @@ namespace Tests
     public class TestMethodBodyConverter
     {
         [Test]
+        public void TEst()
+        {
+            Console.WriteLine(typeof(GroboIL).Assembly.FullName);
+        }
+
+        [Test]
         public void Simple()
         {
             var dynamicMethod = new DynamicMethod(Guid.NewGuid().ToString(), typeof(int), new[] { typeof(int), typeof(int) }, typeof(string), true);
