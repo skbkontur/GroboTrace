@@ -353,9 +353,6 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	if (!lstrcmpW(assemblyNameBuffer, L"GroboTrace.Core"))
 		return S_OK;
 
-	if (!lstrcmpW(assemblyNameBuffer, L"GroboTrace.Api"))
-		return S_OK;
-
 	if (!lstrcmpW(assemblyNameBuffer, L"GrEmit"))
 		return S_OK;
 

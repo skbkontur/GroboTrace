@@ -2,8 +2,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-using GroboTrace.Api;
-
 namespace GroboTrace.Core
 {
     internal class MethodCallTree

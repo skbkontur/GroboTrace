@@ -1,9 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-
-using GroboTrace.Api;
 
 namespace GroboTrace.Core
 {
@@ -96,8 +93,10 @@ namespace GroboTrace.Core
                 node.Calls = 0;
                 node.Ticks = 0;
                 foreach(var child in node.children)
+                {
                     if(child != null)
                         queue.Enqueue(child);
+                }
             }
         }
 

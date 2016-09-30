@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{FA6D4410-27DE-48DF-B9BA-5136E443ADA9}</ProjectGuid>
+    <ProjectGuid>{72CEEC90-DCC6-45F6-9298-8E38E76A5869}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>GroboTrace</RootNamespace>
@@ -41,14 +41,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="TracingAnalyzer.cs" />
+    <Compile Include="DontTraceAttribute.cs" />
+    <Compile Include="MethodStats.cs" />
+    <Compile Include="MethodStatsNode.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\GroboTrace.Api\GroboTrace.Api.csproj">
-      <Project>{72ceec90-dcc6-45f6-9298-8e38e76a5869}</Project>
-      <Name>GroboTrace.Api</Name>
-    </ProjectReference>
+    <Compile Include="Stats.cs" />
+    <Compile Include="TracingAnalyzer.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

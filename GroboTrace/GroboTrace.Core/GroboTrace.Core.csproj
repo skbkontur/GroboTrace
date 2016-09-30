@@ -67,9 +67,9 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\GroboTrace.Api\GroboTrace.Api.csproj">
+    <ProjectReference Include="..\GroboTrace\GroboTrace.csproj">
       <Project>{72ceec90-dcc6-45f6-9298-8e38e76a5869}</Project>
-      <Name>GroboTrace.Api</Name>
+      <Name>GroboTrace</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

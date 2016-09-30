@@ -12,7 +12,7 @@ using System.Threading;
 using GrEmit.Injection;
 using GrEmit.MethodBodyParsing;
 
-using GroboTrace.Api;
+using GroboTrace;
 
 using RGiesecke.DllExport;
 

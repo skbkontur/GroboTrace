@@ -4,8 +4,6 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 
-using GroboTrace.Api;
-
 namespace GroboTrace
 {
     public static class TracingAnalyzer
