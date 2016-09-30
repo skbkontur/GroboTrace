@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -16,60 +15,11 @@ using GrEmit.MethodBodyParsing;
 using RGiesecke.DllExport;
 
 using ExceptionHandler = GrEmit.MethodBodyParsing.ExceptionHandler;
-using MetadataToken = GrEmit.MethodBodyParsing.MetadataToken;
 using MethodBody = GrEmit.MethodBodyParsing.MethodBody;
-using OpCode = GrEmit.MethodBodyParsing.OpCode;
 using OpCodes = GrEmit.MethodBodyParsing.OpCodes;
 
 namespace GroboTrace
 {
-    public static class Extensions
-    {
-        public static Type GetDelegateType(Type[] parameterTypes, Type returnType)
-        {
-            if(returnType == typeof(void))
-            {
-                switch(parameterTypes.Length)
-                {
-                case 0:
-                    return typeof(Action);
-                case 1:
-                    return typeof(Action<>).MakeGenericType(parameterTypes);
-                case 2:
-                    return typeof(Action<,>).MakeGenericType(parameterTypes);
-                case 3:
-                    return typeof(Action<,,>).MakeGenericType(parameterTypes);
-                case 4:
-                    return typeof(Action<,,,>).MakeGenericType(parameterTypes);
-                case 5:
-                    return typeof(Action<,,,,>).MakeGenericType(parameterTypes);
-                case 6:
-                    return typeof(Action<,,,,,>).MakeGenericType(parameterTypes);
-                default:
-                    throw new NotSupportedException("Too many parameters for Action: " + parameterTypes.Length);
-                }
-            }
-            parameterTypes = parameterTypes.Concat(new[] {returnType}).ToArray();
-            switch(parameterTypes.Length)
-            {
-            case 1:
-                return typeof(Func<>).MakeGenericType(parameterTypes);
-            case 2:
-                return typeof(Func<,>).MakeGenericType(parameterTypes);
-            case 3:
-                return typeof(Func<,,>).MakeGenericType(parameterTypes);
-            case 4:
-                return typeof(Func<,,,>).MakeGenericType(parameterTypes);
-            case 5:
-                return typeof(Func<,,,,>).MakeGenericType(parameterTypes);
-            case 6:
-                return typeof(Func<,,,,,>).MakeGenericType(parameterTypes);
-            default:
-                throw new NotSupportedException("Too many parameters for Func: " + parameterTypes.Length);
-            }
-        }
-    }
-
     [StructLayout(LayoutKind.Sequential)]
     public struct COR_IL_MAP
     {
@@ -113,8 +63,6 @@ namespace GroboTrace
             methodFinishedAddress = typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
         }
 
-        internal static readonly ConcurrentDictionary<MethodBase, int> tracedMethods = new ConcurrentDictionary<MethodBase, int>();
-
         public static long TemplateForTicksSignature()
         {
             return 0L;
@@ -128,11 +76,8 @@ namespace GroboTrace
                 parameterTypes = createDelegateMethod.GetParameters().Select(x => x.ParameterType).ToArray();
             else
                 parameterTypes = new[] {createDelegateMethod.ReflectedType ?? createDelegateMethod.DeclaringType}.Concat(createDelegateMethod.GetParameters().Select(x => x.ParameterType)).ToArray();
-            var dynamicMethod = new DynamicMethod(createDelegateMethod.Name + "_" + Guid.NewGuid(), createDelegateMethod.ReturnType, parameterTypes, typeof(DynamicMethod), true);
 
             var methodBody = MethodBody.Read(createDelegateMethod, true);
-
-            sendToDebug("Plain", createDelegateMethod, methodBody);
 
             var traceMethod = typeof(DynamicMethodTracingInstaller).GetMethod("InstallTracing", BindingFlags.Static | BindingFlags.Public);
 
@@ -141,11 +86,13 @@ namespace GroboTrace
             methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Ldarg_0));
             methodBody.Instructions.Insert(startIndex++, Instruction.Create(OpCodes.Call, traceMethod));
 
-            methodBody.WriteToDynamicMethod(dynamicMethod, Math.Max(methodBody.MaxStack, 2));
+            var changedCreateDelegate = methodBody.CreateDelegate(createDelegateMethod.ReturnType, parameterTypes, Math.Max(methodBody.MaxStack, 2));
 
-            createDelegateMethods.Add(dynamicMethod.CreateDelegate(Extensions.GetDelegateType(parameterTypes, createDelegateMethod.ReturnType)));
+            // Save reference to the delegate, otherwise it would be collected by GC
+            createDelegateMethods.Add(changedCreateDelegate);
 
-            if(!MethodUtil.HookMethod(dynamicMethod, createDelegateMethod))
+            Action unhook;
+            if(!MethodUtil.HookMethod(createDelegateMethod, changedCreateDelegate.Method, out unhook))
                 throw new InvalidOperationException("Unable to hook DynamicMethod.CreateDelegate");
         }
 
@@ -208,7 +155,7 @@ namespace GroboTrace
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate IntPtr MapEntriesAllocator(UIntPtr size);
 
-        [DllExport]
+        [DllExport(CallingConvention = CallingConvention.Cdecl)]
         public static void Init([MarshalAs(UnmanagedType.FunctionPtr)] SignatureTokenBuilderDelegate signatureTokenBuilderDelegate,
                                 [MarshalAs(UnmanagedType.FunctionPtr)] MapEntriesAllocator mapEntriesAllocator)
         {
@@ -225,14 +172,14 @@ namespace GroboTrace
 
             MethodBody.Init();
 
-            HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new[] { typeof(Type), typeof(object) }, null));
-            HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new[] { typeof(Type) }, null));
+            HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new[] {typeof(Type), typeof(object)}, null));
+            HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new[] {typeof(Type)}, null));
 
             RuntimeHelpers.PrepareMethod(typeof(TracingAnalyzer).GetMethod("MethodStarted", BindingFlags.Public | BindingFlags.Static).MethodHandle);
             RuntimeHelpers.PrepareMethod(typeof(TracingAnalyzer).GetMethod("MethodFinished", BindingFlags.Public | BindingFlags.Static).MethodHandle);
         }
 
-        [DllExport]
+        [DllExport(CallingConvention = CallingConvention.Cdecl)]
         public static SharpResponse InstallTracing(
             [MarshalAs(UnmanagedType.LPWStr)] string assemblyName,
             [MarshalAs(UnmanagedType.LPWStr)] string moduleName,
@@ -283,28 +230,25 @@ namespace GroboTrace
                 return response;
             }
 
-            //var output = method.IsConstructor && method.DeclaringType.FullName.Contains("JsonSerializer");
-            //var output = method.IsConstructor && method.DeclaringType.FullName.Contains("SKBKontur.Catalogue.ClientLib.Sharding");
             var output = true;
 
-            if (output) Debug.WriteLine(".NET: method {0} is asked to be traced", method);
+            if(output) Debug.WriteLine(".NET: method {0} is asked to be traced", method);
 
             var methodBody = MethodBody.Read(rawMethodBody, module, new MetadataToken(methodToken), false);
 
             var rawSignature = methodBody.MethodSignature;
             var methodSignature = new SignatureReader(rawSignature).ReadAndParseMethodSignature();
 
-            if (output) Debug.WriteLine(".NET: method's signature is: " + Convert.ToBase64String(rawSignature));
-            if (output) Debug.WriteLine(".NET: method has {0} parameters", methodSignature.ParamCount);
+            if(output) Debug.WriteLine(".NET: method's signature is: " + Convert.ToBase64String(rawSignature));
+            if(output) Debug.WriteLine(".NET: method has {0} parameters", methodSignature.ParamCount);
 
-
-            if (output) sendToDebug("Plain", method, methodBody);
+            if(output) sendToDebug("Plain", method, methodBody);
 
             var methodContainsCycles = CycleFinderWithoutRecursion.HasCycle(methodBody.Instructions.ToArray());
 
-            if (output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
+            if(output) Debug.WriteLine("Contains cycles: " + methodContainsCycles + "\n");
 
-            if (!methodContainsCycles && methodBody.Instructions.Count < 50)
+            if(!methodContainsCycles && methodBody.Instructions.Count < 50)
             {
                 Debug.WriteLine(method + " too simple to be traced");
                 return response;
@@ -323,12 +267,9 @@ namespace GroboTrace
 
             int resultLocalIndex = -1;
             int ticksLocalIndex;
-            byte[] newSignature;
 
             if(methodSignature.HasReturnType)
-            {
                 resultLocalIndex = methodBody.AddLocalVariable(methodSignature.ReturnTypeSignature).LocalIndex;
-            }
 
             ticksLocalIndex = methodBody.AddLocalVariable(typeof(long)).LocalIndex;
 
@@ -355,8 +296,8 @@ namespace GroboTrace
                     var bindingFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
                     var constructors = new HashSet<int>(
                         declaringType.GetConstructors(bindingFlags)
-                        .Concat(baseType.GetConstructors(bindingFlags))
-                        .Select(c => c.MetadataToken));
+                                     .Concat(baseType.GetConstructors(bindingFlags))
+                                     .Select(c => c.MetadataToken));
                     for(int i = 0; i < methodBody.Instructions.Count; ++i)
                     {
                         var instruction = methodBody.Instructions[i];
@@ -414,23 +355,25 @@ namespace GroboTrace
 
             methodBody.Instructions.Insert(methodBody.Instructions.IndexOf(tryEndInstruction), Instruction.Create(OpCodes.Leave, finallyEndInstruction));
 
-            foreach (var exceptionHandler in methodBody.ExceptionHandlers)
-                if (exceptionHandler.HandlerEnd == null)
+            foreach(var exceptionHandler in methodBody.ExceptionHandlers)
+            {
+                if(exceptionHandler.HandlerEnd == null)
                     exceptionHandler.HandlerEnd = endInstructionBeforeModifying;
+            }
 
             methodBody.ExceptionHandlers.Add(newException);
 
-            if (output) Debug.WriteLine("Initial maxStackSize = " + methodBody.MaxStack);
-            if (output) Debug.WriteLine("");
+            if(output) Debug.WriteLine("Initial maxStackSize = " + methodBody.MaxStack);
+            if(output) Debug.WriteLine("");
 
             methodBody.Seal();
-          
+
             var methodBytes = methodBody.GetFullMethodBody(sig => signatureTokenBuilder(moduleId, sig), Math.Max(methodBody.MaxStack, 4));
 
-            if (output) sendToDebug("Changed", method, methodBody);
+            if(output) sendToDebug("Changed", method, methodBody);
 
-            if (output) Debug.WriteLine("Calculated maxStackSize = " + methodBody.MaxStack);
-            if (output) Debug.WriteLine("");
+            if(output) Debug.WriteLine("Calculated maxStackSize = " + methodBody.MaxStack);
+            if(output) Debug.WriteLine("");
 
             var newMethodBody = (IntPtr)allocateForMethodBody(moduleId, (uint)methodBytes.Length);
             Marshal.Copy(methodBytes, 0, newMethodBody, methodBytes.Length);
@@ -526,7 +469,7 @@ namespace GroboTrace
             while(index < instructions.Count)
             {
                 var instruction = instructions[index];
-                if (instruction.OpCode == OpCodes.Ret)
+                if(instruction.OpCode == OpCodes.Ret)
                 {
                     // replace Ret with Nop
                     instructions[index].OpCode = OpCodes.Nop;
@@ -560,11 +503,13 @@ namespace GroboTrace
             int adjustedIndex = index;
 
             int arrayIndex = GetArrayIndex(index + 1);
-            if (arrayIndex > 0)
+            if(arrayIndex > 0)
                 adjustedIndex -= counts[arrayIndex - 1];
 
             return methods[arrayIndex][adjustedIndex];
         }
+
+        internal static readonly ConcurrentDictionary<MethodBase, int> tracedMethods = new ConcurrentDictionary<MethodBase, int>();
 
         private static readonly List<Delegate> createDelegateMethods = new List<Delegate>();
 

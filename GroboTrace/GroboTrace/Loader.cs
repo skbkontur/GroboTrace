@@ -8,21 +8,20 @@ using RGiesecke.DllExport;
 
 namespace GroboTrace
 {
+    // Resolves GrEmit.dll - seems that this can only be done on .NET level
     public static class Loader
     {
-        private static string profilerDirectory;
-
         private static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
         {
-            if (!args.Name.StartsWith("GrEmit,"))
+            if(!args.Name.StartsWith("GrEmit,"))
                 return null;
-            if (File.Exists("GrEmit.dll"))
+            if(File.Exists("GrEmit.dll"))
                 return null;
             Debug.WriteLine("Asked to load GrEmit: " + args.Name);
             return Assembly.LoadFrom(Path.Combine(profilerDirectory, "GrEmit.dll"));
         }
 
-        [DllExport]
+        [DllExport(CallingConvention = CallingConvention.Cdecl)]
         public static void SetProfilerPath([MarshalAs(UnmanagedType.LPWStr)] string profilerDirectory)
         {
             Debug.WriteLine("Profiler directory: " + profilerDirectory);
@@ -31,5 +30,7 @@ namespace GroboTrace
 
             AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
         }
+
+        private static string profilerDirectory;
     }
 }

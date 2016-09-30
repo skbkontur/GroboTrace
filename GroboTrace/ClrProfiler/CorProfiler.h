@@ -4,10 +4,12 @@
 #pragma once
 
 #include <atomic>
+#include <string>
 #include "cor.h"
 #include "corprof.h"
 #include "CComPtr.h"
 
+using namespace std;
 
 struct SharpResponse
 {
@@ -16,20 +18,23 @@ struct SharpResponse
 	ULONG mapEntriesCount;
 };
 
-
-
 class CorProfiler : public ICorProfilerCallback5
 {
-public:
+private:
     std::atomic<int> refCount;
-    ICorProfilerInfo4* corProfilerInfo;
 
 	SharpResponse(* volatile callback)(WCHAR*, WCHAR*, ModuleID, mdToken, char*, void*);
-	void(*init)(void*, void*);
-	void(*setProfilerPath)(WCHAR*);
+	void(* volatile init)(void*, void*);
+	void(* volatile setProfilerPath)(WCHAR*);
+
+	wstring profilerFolder;
+
+	void FindProfilerFolder();
 
 public:
-    CorProfiler();
+	ICorProfilerInfo4* corProfilerInfo;
+
+	CorProfiler();
     virtual ~CorProfiler();
 
     HRESULT STDMETHODCALLTYPE Initialize(IUnknown* pICorProfilerInfoUnk) override;

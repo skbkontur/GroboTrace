@@ -5,6 +5,8 @@
 #include "corhlpr.h"
 #include "CComPtr.h"
 #include "profiler_pal.h"
+#include <fstream>
+#include <unordered_set>
 
 static void STDMETHODCALLTYPE Enter(FunctionID functionId)
 {
@@ -54,6 +56,8 @@ void DebugOutput(WCHAR* str)
 #endif
 }
 
+#define USE_SETTINGS
+
 HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk)
 {
 	OutputDebugString(L"Profiler started");
@@ -67,9 +71,55 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
         return E_FAIL;
     }
 
-    DWORD eventMask = COR_PRF_MONITOR_JIT_COMPILATION
-		              | COR_PRF_DISABLE_TRANSPARENCY_CHECKS_UNDER_FULL_TRUST /* helps the case where this profiler is used on Full CLR */
-                      /*| COR_PRF_DISABLE_INLINING*/                             ;
+	FindProfilerFolder();
+
+#ifdef USE_SETTINGS
+
+	wstring settingsFileName = profilerFolder + L"\\GroboTrace.ini";
+	auto settingsStream = wifstream(settingsFileName);
+	bool needProfile;
+	if (!settingsStream.is_open())
+		needProfile = false;
+	else
+	{
+		auto toProfile = unordered_set<wstring>();
+		while (!settingsStream.eof())
+		{
+			wstring cur;
+			settingsStream >> cur;
+			toProfile.insert(cur);
+		}
+
+		WCHAR fullFileName[1024];
+		WCHAR str[1024];
+		auto len = GetModuleFileNameW(nullptr, fullFileName, 1024);
+		OutputDebugStringW(L"Asked to profile:");
+		OutputDebugStringW(fullFileName);
+
+		wstring fileName;
+		for (int i = len - 1; i >= 0; --i)
+			if (fullFileName[i] == '\\')
+			{
+				fileName = wstring(&fullFileName[i + 1]);
+				break;
+			}
+
+		needProfile = (toProfile.find(wstring(fileName)) != toProfile.end());
+		settingsStream.close();
+	}
+
+	OutputDebugStringW(needProfile ? L"will profile" : L"skipped");
+	DWORD eventMask = needProfile ? COR_PRF_MONITOR_JIT_COMPILATION
+		| COR_PRF_DISABLE_TRANSPARENCY_CHECKS_UNDER_FULL_TRUST /* helps the case where this profiler is used on Full CLR */
+															   /*| COR_PRF_DISABLE_INLINING*/
+		: COR_PRF_MONITOR_NONE;
+
+#else
+	DWORD eventMask = COR_PRF_MONITOR_JIT_COMPILATION
+		| COR_PRF_DISABLE_TRANSPARENCY_CHECKS_UNDER_FULL_TRUST /* helps the case where this profiler is used on Full CLR */
+															   /*| COR_PRF_DISABLE_INLINING*/
+		;
+#endif
 
     auto hr = this->corProfilerInfo->SetEventMask(eventMask);
 
@@ -78,6 +128,20 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
 	OutputDebugString(L"Profiler successfully initialized");
 
     return S_OK;
+}
+
+void CorProfiler::FindProfilerFolder()
+{
+	WCHAR fileName[1024];
+
+	int len = GetModuleFileName(GetModuleHandle(L"ClrProfiler.dll"), fileName, 1024);
+	for (int i = len - 1; i >= 0; --i)
+		if (fileName[i] == '\\')
+		{
+			fileName[i] = 0;
+			break;
+		}
+	profilerFolder = wstring(fileName);
 }
 
 HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
@@ -195,19 +259,16 @@ void* allocateForMethodBody(ModuleID moduleId, ULONG size)
 
 mdToken GetTokenFromSig(ModuleID moduleId, char* sig, int len)
 {
-	DebugOutput(L"We are in GetTokenFromSig {C++}");
-
 	CComPtr<IMetaDataEmit> metadataEmit;
 	if (FAILED(corProfiler->corProfilerInfo->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataEmit, reinterpret_cast<IUnknown **>(&metadataEmit))))
 	{
-		DebugOutput(L"Failed to get metadata emit {C++}");
+		OutputDebugString(L"Failed to get metadata emit {C++}");
 		return 0;
 	}
 	
 	mdSignature token;
 	metadataEmit->GetTokenFromSig(reinterpret_cast<PCCOR_SIGNATURE>(sig), len, &token);
 
-	DebugOutput(L"Success: Token for sig created/found {C++}");
 	return token;
 }
 
@@ -298,10 +359,9 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 	if (!lstrcmpW(assemblyNameBuffer, L"mscorlib"))
 		return S_OK;
 
-	sprintf(str, "JIT Compilation of the method %I64d %ls.%ls\r\n", functionId, typeNameBuffer, methodNameBuffer);
+	//sprintf(str, "JIT Compilation of the method %I64d %ls.%ls\r\n", functionId, typeNameBuffer, methodNameBuffer);
 
-	DebugOutput(str);
-
+	//DebugOutput(str);
 
 	if (!callback)
 	{
@@ -329,7 +389,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 			{
 				groboTrace = LoadLibrary(L"GroboTrace.dll");
 				if (groboTrace)
-					DebugOutput(L"Load GroboTrace from victim's directory");
+					DebugOutput(L"Loaded GroboTrace from victim's directory");
 				else {
 					DebugOutput(fileName);
 					auto lib = LoadLibrary(fileName);

@@ -60,7 +60,6 @@
   <ItemGroup>
     <Compile Include="CycleFinderWithoutRecursion.cs" />
     <Compile Include="DynamicMethodTracingInstaller.cs" />
-    <Compile Include="IClassWrapper.cs" />
     <Compile Include="MethodCallNode.cs" />
     <Compile Include="MethodCallTree.cs" />
     <Compile Include="MethodStats.cs" />
