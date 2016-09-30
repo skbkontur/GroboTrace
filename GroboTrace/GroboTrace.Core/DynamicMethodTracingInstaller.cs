@@ -9,7 +9,7 @@ using ExceptionHandler = GrEmit.MethodBodyParsing.ExceptionHandler;
 using MethodBody = GrEmit.MethodBodyParsing.MethodBody;
 using OpCodes = GrEmit.MethodBodyParsing.OpCodes;
 
-namespace GroboTrace
+namespace GroboTrace.Core
 {
     public class DynamicMethodTracingInstaller
     {

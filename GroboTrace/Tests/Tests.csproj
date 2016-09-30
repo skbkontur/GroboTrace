@@ -63,7 +63,7 @@
     <Compile Include="TestNonPublic.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\GroboTrace\GroboTrace.csproj">
+    <ProjectReference Include="..\GroboTrace.Core\GroboTrace.Core.csproj">
       <Project>{721F6C9C-8718-4848-B568-5904F860044D}</Project>
       <Name>GroboTrace</Name>
     </ProjectReference>

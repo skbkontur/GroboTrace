@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace GroboTrace
+namespace GroboTrace.Core
 {
     internal class MethodCallNode
     {

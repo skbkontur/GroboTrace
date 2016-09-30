@@ -77,7 +77,7 @@
     <Analyzer Include="..\packages\Microsoft.CodeAnalysis.Analyzers.1.1.0\analyzers\dotnet\cs\Microsoft.CodeAnalysis.CSharp.Analyzers.dll" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\GroboTrace\GroboTrace.csproj">
+    <ProjectReference Include="..\GroboTrace.Core\GroboTrace.Core.csproj">
       <Project>{721f6c9c-8718-4848-b568-5904f860044d}</Project>
       <Name>GroboTrace</Name>
     </ProjectReference>

@@ -18,7 +18,7 @@ using ExceptionHandler = GrEmit.MethodBodyParsing.ExceptionHandler;
 using MethodBody = GrEmit.MethodBodyParsing.MethodBody;
 using OpCodes = GrEmit.MethodBodyParsing.OpCodes;
 
-namespace GroboTrace
+namespace GroboTrace.Core
 {
     [StructLayout(LayoutKind.Sequential)]
     public struct COR_IL_MAP

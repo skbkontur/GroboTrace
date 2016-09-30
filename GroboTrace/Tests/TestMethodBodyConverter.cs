@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 using GrEmit;
-using GroboTrace;
+using GroboTrace.Core;
 using GrEmit.Injection;
 
 using NUnit.Framework;

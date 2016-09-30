@@ -10,7 +10,7 @@ using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 
-using GroboTrace;
+using GroboTrace.Core;
 
 namespace Benchmarks
 {

@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace GroboTrace
+namespace GroboTrace.Core
 {
     public class MethodStats
     {

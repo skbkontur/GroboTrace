@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading;
 
-namespace GroboTrace
+namespace GroboTrace.Core
 {
     public class DontTraceAttribute : Attribute
     {

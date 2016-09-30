@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 14.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroboTrace", "GroboTrace\GroboTrace.csproj", "{721F6C9C-8718-4848-B568-5904F860044D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroboTrace.Core", "GroboTrace.Core\GroboTrace.Core.csproj", "{721F6C9C-8718-4848-B568-5904F860044D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj", "{23854843-A385-4299-8D52-3E567CECB004}"
 EndProject

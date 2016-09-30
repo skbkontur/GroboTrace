@@ -3,7 +3,7 @@ using System.Linq;
 
 using GrEmit.MethodBodyParsing;
 
-namespace GroboTrace
+namespace GroboTrace.Core
 {
     internal static class CycleFinderWithoutRecursion
     {

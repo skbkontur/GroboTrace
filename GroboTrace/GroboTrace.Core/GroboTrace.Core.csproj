@@ -8,8 +8,8 @@
     <ProjectGuid>{721F6C9C-8718-4848-B568-5904F860044D}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>GroboTrace</RootNamespace>
-    <AssemblyName>GroboTrace</AssemblyName>
+    <RootNamespace>GroboTrace.Core</RootNamespace>
+    <AssemblyName>GroboTrace.Core</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />

@@ -1,4 +1,4 @@
-namespace GroboTrace
+namespace GroboTrace.Core
 {
     public class MethodStatsNode
     {

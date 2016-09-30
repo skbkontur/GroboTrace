@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 
 using RGiesecke.DllExport;
 
-namespace GroboTrace
+namespace GroboTrace.Core
 {
     // Resolves GrEmit.dll - seems that this can only be done on .NET level
     public static class Loader
