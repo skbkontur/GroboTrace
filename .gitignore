@@ -12,3 +12,4 @@ GroboTrace/packages/
 Assemblies/ClrProfiler.dll
 *.sdf
 *.opendb
+Assemblies/GroboTrace.Core.dll
