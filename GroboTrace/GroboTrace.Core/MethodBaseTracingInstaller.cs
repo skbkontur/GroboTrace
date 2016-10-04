@@ -529,7 +529,7 @@ namespace GroboTrace.Core
         private static MapEntriesAllocator allocateForMapEntries;
 
         private static readonly MethodBase[][] methods = new MethodBase[32][];
-        private static int numberOfMethods;
+        internal static int numberOfMethods;
 
         private static readonly int[] sizes;
         private static readonly int[] counts;

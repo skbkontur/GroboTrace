@@ -1,21 +1,29 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 
 namespace GroboTrace.Core
 {
     internal class MethodCallNode
     {
+        internal static int totalNodes;
+        internal static int totalChildren;
+
         public MethodCallNode(MethodCallNode parent, int methodId)
         {
             this.parent = parent;
             MethodId = methodId;
             handles = new int[1];
             children = new MethodCallNode[1];
+            Interlocked.Increment(ref totalNodes);
+            Interlocked.Increment(ref totalChildren);
         }
 
         public MethodCallNode StartMethod(int methodId)
         {
+            //return children[0] ?? (children[0] = new MethodCallNode(this, methodId));
             //return this;
             var index = methodId % handles.Length;
             if(handles[index] == methodId)
@@ -144,6 +152,9 @@ namespace GroboTrace.Core
                     newChildren[index] = children[i];
                 }
             }
+
+            Interlocked.Add(ref totalChildren, newChildren.Length - children.Length);
+
             handles = newHandles;
             children = newChildren;
             return newHandle % length;
