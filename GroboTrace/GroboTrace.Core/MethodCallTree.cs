@@ -6,11 +6,11 @@ namespace GroboTrace.Core
 {
     internal class MethodCallTree
     {
-        public MethodCallTree(long ticks)
+        public MethodCallTree()
         {
             root = new MethodCallNode(null, 0);
             current = root;
-            startTicks = ticks;
+            startTicks = MethodBaseTracingInstaller.TicksReader();
         }
 
         public void StartMethod(int methodId)
@@ -43,10 +43,10 @@ namespace GroboTrace.Core
             return result;
         }
 
-        public void ClearStats(long ticks)
+        public void ClearStats()
         {
             current.ClearStats();
-            startTicks = ticks;
+            startTicks = MethodBaseTracingInstaller.TicksReader();
         }
 
         private readonly MethodCallNode root;

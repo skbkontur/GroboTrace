@@ -18,8 +18,6 @@ namespace Benchmarks
     {
         public static void Main(string[] args)
         {
-            //new Program().Setup();
-            //return;
             BenchmarkRunner.Run<Program>(
                 ManualConfig.Create(DefaultConfig.Instance)
 //                            .With(Job.LegacyJitX86)
@@ -45,18 +43,11 @@ namespace Benchmarks
         [Setup]
         public void Setup()
         {
-            if(!initialized)
-            {
-                initialized = true;
-                MethodBaseTracingInstaller.Init(null, null);
-            }
+            MethodBaseTracingInstaller.TicksReader();
             var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(void), Type.EmptyTypes, typeof(string), true);
             method.GetILGenerator().Emit(OpCodes.Ret);
             action = (Action)method.CreateDelegate(typeof(Action));
-            //action();
         }
-
-        private static bool initialized;
 
         private Action action;
     }

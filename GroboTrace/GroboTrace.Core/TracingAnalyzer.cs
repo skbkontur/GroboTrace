@@ -9,9 +9,8 @@ namespace GroboTrace.Core
         private static MethodCallTree[] CreateZzz()
         {
             var result = new MethodCallTree[100000];
-            long ticks = MethodBaseTracingInstaller.TicksReader();
             for(int i = 0; i < result.Length; ++i)
-                result[i] = new MethodCallTree(ticks);
+                result[i] = new MethodCallTree();
             return result;
         }
 
@@ -48,9 +47,6 @@ namespace GroboTrace.Core
             var localTree = GetTree();
             return new Stats
                 {
-                    TotalChildren = MethodCallNode.totalChildren,
-                    TotalNodes = MethodCallNode.totalNodes,
-                    TotalMethods = MethodBaseTracingInstaller.numberOfMethods,
                     ElapsedTicks = localTree == null ? 0 : ticks - localTree.startTicks,
                     Tree = localTree == null ? new MethodStatsNode() : localTree.GetStatsAsTree(ticks),
                     List = localTree == null ? new List<MethodStats>() : localTree.GetStatsAsList(ticks)
@@ -61,10 +57,10 @@ namespace GroboTrace.Core
         {
             var localTree = GetTree();
             if(localTree != null)
-                localTree.ClearStats(MethodBaseTracingInstaller.TicksReader());
+                localTree.ClearStats();
         }
 
         private static readonly MethodCallTree[] zzz = CreateZzz();
-        //private static MethodCallTree qxx = new MethodCallTree();
+        private static MethodCallTree qxx = new MethodCallTree();
     }
 }
