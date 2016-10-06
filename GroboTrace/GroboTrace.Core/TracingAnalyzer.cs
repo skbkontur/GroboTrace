@@ -9,8 +9,8 @@ namespace GroboTrace.Core
         private static MethodCallTree[] CreateZzz()
         {
             var result = new MethodCallTree[100000];
-            //for(int i = 0; i < result.Length; ++i)
-            //    result[i] = new MethodCallTree();
+            for(int i = 0; i < result.Length; ++i)
+                result[i] = new MethodCallTree();
             return result;
         }
 
@@ -19,7 +19,7 @@ namespace GroboTrace.Core
 //            qxx.StartMethod(methodId);
             var id = Thread.CurrentThread.ManagedThreadId;
             if(id < zzz.Length)
-                (zzz[id] ?? (zzz[id] = new MethodCallTree())).StartMethod(methodId);
+                (zzz[id]).StartMethod(methodId);
             else throw new NotSupportedException();
         }
 
@@ -28,7 +28,7 @@ namespace GroboTrace.Core
 //            qxx.FinishMethod(methodId, elapsed);
             var id = Thread.CurrentThread.ManagedThreadId;
             if(id < zzz.Length)
-                (zzz[id] ?? (zzz[id] = new MethodCallTree())).FinishMethod(methodId, elapsed);
+                (zzz[id]).FinishMethod(methodId, elapsed);
             else throw new NotSupportedException();
             //            tree.Value.FinishMethod(methodHandle, elapsed);
         }
