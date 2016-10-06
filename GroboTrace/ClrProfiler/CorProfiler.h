@@ -27,12 +27,14 @@ private:
 	void(* volatile init)(void*, void*);
 	void(* volatile setProfilerPath)(WCHAR*);
 
+	RTL_CRITICAL_SECTION criticalSection;
 	wstring profilerFolder;
 
 	void FindProfilerFolder();
 
 public:
 	ICorProfilerInfo4* corProfilerInfo;
+	void Log(wstring str);
 
 	CorProfiler();
     virtual ~CorProfiler();

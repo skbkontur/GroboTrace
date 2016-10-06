@@ -6,26 +6,11 @@
 #include "CComPtr.h"
 #include "profiler_pal.h"
 #include <fstream>
+#include <sstream>
 #include <unordered_set>
-
-static void STDMETHODCALLTYPE Enter(FunctionID functionId)
-{
-    printf("\r\nEnter %" UINT_PTR_FORMAT "", (UINT64)functionId);
-}
-
-static void STDMETHODCALLTYPE Leave(FunctionID functionId)
-{
-    printf("\r\nLeave %" UINT_PTR_FORMAT "", (UINT64)functionId);
-}
-
-COR_SIGNATURE enterLeaveMethodSignature             [] = { IMAGE_CEE_CS_CALLCONV_STDCALL, 0x01, ELEMENT_TYPE_VOID, ELEMENT_TYPE_I };
-
-void(STDMETHODCALLTYPE *EnterMethodAddress)(FunctionID) = &Enter;
-void(STDMETHODCALLTYPE *LeaveMethodAddress)(FunctionID) = &Leave;
 
 //global static singleton
 CorProfiler* corProfiler;
-RTL_CRITICAL_SECTION criticalSection;
 
 CorProfiler::CorProfiler() : refCount(0), corProfilerInfo(nullptr), callback(nullptr), init(nullptr)
 {
@@ -58,9 +43,26 @@ void DebugOutput(WCHAR* str)
 
 #define USE_SETTINGS
 
+DWORD STDMETHODCALLTYPE Suicide(void *p)
+{
+	for (int i = 0; i < 10; ++i)
+	{
+		Sleep(1000);
+		corProfiler->Log(L"Requesting profiler detach");
+		if (corProfiler->corProfilerInfo->RequestProfilerDetach(0) == S_OK)
+			break;
+	}
+	return 0;
+}
+
+void CorProfiler::Log(wstring str)
+{
+	OutputDebugString((L"grobotrace: " + str).c_str());
+}
+
 HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk)
 {
-	OutputDebugString(L"Profiler started");
+	Log(L"Profiler started");
 
 	corProfiler = this;
 
@@ -93,8 +95,8 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
 		WCHAR fullFileName[1024];
 		WCHAR str[1024];
 		auto len = GetModuleFileNameW(nullptr, fullFileName, 1024);
-		OutputDebugStringW(L"Asked to profile:");
-		OutputDebugStringW(fullFileName);
+		Log(L"Asked to profile:");
+		Log(fullFileName);
 
 		wstring fileName;
 		for (int i = len - 1; i >= 0; --i)
@@ -108,7 +110,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
 		settingsStream.close();
 	}
 
-	OutputDebugStringW(needProfile ? L"will profile" : L"skipped");
+	Log(needProfile ? L"will profile" : L"skipped");
 	DWORD eventMask = needProfile ? COR_PRF_MONITOR_JIT_COMPILATION
 		| COR_PRF_DISABLE_TRANSPARENCY_CHECKS_UNDER_FULL_TRUST /* helps the case where this profiler is used on Full CLR */
 															   /*| COR_PRF_DISABLE_INLINING*/
@@ -125,7 +127,13 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
 
 	InitializeCriticalSection(&criticalSection);
 
-	OutputDebugString(L"Profiler successfully initialized");
+	Log(L"Profiler successfully initialized");
+
+	if (!needProfile)
+	{
+		DWORD tmp;
+		CreateThread(0, 0, Suicide, 0, 0, &tmp);
+	}
 
     return S_OK;
 }
@@ -146,12 +154,13 @@ void CorProfiler::FindProfilerFolder()
 
 HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
 {
+	Log(L"Profiler is about to shutdown");
     if (this->corProfilerInfo != nullptr)
     {
         this->corProfilerInfo->Release();
         this->corProfilerInfo = nullptr;
     }
-
+	DeleteCriticalSection(&criticalSection);
     return S_OK;
 }
 
@@ -821,6 +830,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ProfilerAttachComplete()
 
 HRESULT STDMETHODCALLTYPE CorProfiler::ProfilerDetachSucceeded()
 {
+	Log(L"Profiler detach succeeded");
     return S_OK;
 }
 
