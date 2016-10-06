@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 
 namespace GroboTrace.Core
 {
@@ -28,7 +30,7 @@ namespace GroboTrace.Core
             if(handles[index] == 0)
             {
                 handles[index] = methodId;
-                children[index] = new MethodCallNode(this, methodId);
+                children[index] = Get(methodId); //new MethodCallNode(this, methodId);
             }
             return children[index];
         }
@@ -83,21 +85,61 @@ namespace GroboTrace.Core
             }
         }
 
+        private static readonly Queue<MethodCallNode>[] queues;
+
+        static MethodCallNode()
+        {
+            queues = new Queue<MethodCallNode>[100000];
+            //for(int i = 0; i < queues.Length; ++i)
+            //    queues[i] = new Queue<MethodCallNode>();
+        }
+
+        private MethodCallNode Get(int methodId)
+        {
+            var id = Thread.CurrentThread.ManagedThreadId;
+            if(id >= 100000) throw new InvalidOperationException();
+            var queue = queues[id] ?? (queues[id] = new Queue<MethodCallNode>());
+            if(queue.Count > 0)
+            {
+                var result = queue.Dequeue();
+                result.parent = this;
+                result.MethodId = methodId;
+            }
+            return new MethodCallNode(this, methodId);
+        }
+
+        private static void Release(MethodCallNode node)
+        {
+            var id = Thread.CurrentThread.ManagedThreadId;
+            if (id >= 100000) throw new InvalidOperationException();
+            var queue = queues[id] ?? (queues[id] = new Queue<MethodCallNode>());
+            node.Calls = 0;
+            node.Ticks = 0;
+            node.parent = null;
+            node.MethodId = 0;
+            queue.Enqueue(node);
+        }
+
         public void ClearStats()
         {
             var queue = new Queue<MethodCallNode>();
             queue.Enqueue(this);
-            while(queue.Count > 0)
+            while (queue.Count > 0)
             {
                 var node = queue.Dequeue();
-                node.Calls = 0;
-                node.Ticks = 0;
-                foreach(var child in node.children)
+                if(node != this)
+                    Release(node);
+                foreach (var child in node.children)
                 {
-                    if(child != null)
+                    if (child != null)
                         queue.Enqueue(child);
                 }
             }
+
+            handles = new int[1];
+            children = new MethodCallNode[1];
+            Calls = 0;
+            Ticks = 0;
         }
 
         public int MethodId { get; set; }
@@ -149,7 +191,7 @@ namespace GroboTrace.Core
             return newHandle % length;
         }
 
-        private readonly MethodCallNode parent;
+        private MethodCallNode parent;
         private MethodCallNode[] children;
         private int[] handles;
     }
