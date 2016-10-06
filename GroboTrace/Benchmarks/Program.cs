@@ -43,12 +43,17 @@ namespace Benchmarks
         [Setup]
         public void Setup()
         {
-            MethodBaseTracingInstaller.TicksReader();
+            if(!initialized)
+            {
+                initialized = true;
+                MethodBaseTracingInstaller.Init(null, null);
+            }
             var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(void), Type.EmptyTypes, typeof(string), true);
             method.GetILGenerator().Emit(OpCodes.Ret);
             action = (Action)method.CreateDelegate(typeof(Action));
         }
 
+        private static bool initialized;
         private Action action;
     }
 }
