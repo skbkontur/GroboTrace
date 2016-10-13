@@ -47,6 +47,9 @@ namespace GroboTrace.Core
             var localTree = GetTree();
             return new Stats
                 {
+                    TotalChildren = MethodCallNode.totalChildren,
+                    TotalNodes = MethodCallNode.totalNodes,
+                    TotalMethods = MethodBaseTracingInstaller.numberOfMethods,
                     ElapsedTicks = localTree == null ? 0 : ticks - localTree.startTicks,
                     Tree = localTree == null ? new MethodStatsNode() : localTree.GetStatsAsTree(ticks),
                     List = localTree == null ? new List<MethodStats>() : localTree.GetStatsAsList(ticks)
