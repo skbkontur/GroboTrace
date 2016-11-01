@@ -9,5 +9,6 @@
   </metadata>
   <files>
     <file src="Output\**" />
+    <file src="install.csx" />
   </files>
 </package>
