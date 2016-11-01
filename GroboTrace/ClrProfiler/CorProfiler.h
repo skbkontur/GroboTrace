@@ -34,7 +34,6 @@ private:
 
 public:
 	ICorProfilerInfo4* corProfilerInfo;
-	void Log(wstring str);
 
 	CorProfiler();
     virtual ~CorProfiler();

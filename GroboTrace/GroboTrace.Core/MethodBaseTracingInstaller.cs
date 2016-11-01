@@ -173,6 +173,7 @@ namespace GroboTrace.Core
             allocateForMapEntries = mapEntriesAllocator;
 
             MethodBody.Init();
+            MethodCallNodeEdgesFactory.Init();
 
             HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new[] {typeof(Type), typeof(object)}, null));
             HookCreateDelegate(typeof(DynamicMethod).GetMethod("CreateDelegate", BindingFlags.Instance | BindingFlags.Public, null, new[] {typeof(Type)}, null));
@@ -529,7 +530,7 @@ namespace GroboTrace.Core
         private static MapEntriesAllocator allocateForMapEntries;
 
         private static readonly MethodBase[][] methods = new MethodBase[32][];
-        internal static int numberOfMethods;
+        private static int numberOfMethods;
 
         private static readonly int[] sizes;
         private static readonly int[] counts;

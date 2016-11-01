@@ -13,6 +13,7 @@ namespace GroboTrace.Core
     {
         private static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
         {
+            Debug.WriteLine(args.Name);
             foreach(var dll in dlls)
             {
                 if(args.Name.StartsWith(dll.FullName))
@@ -37,7 +38,7 @@ namespace GroboTrace.Core
 
         private static readonly DllName[] dlls =
             {
-                new DllName("GrEmit, Version=2.1.4.0, Culture=neutral, PublicKeyToken=null", "GrEmit.dll"),
+                new DllName("GrEmit, Version=2.1.5.0", "GrEmit.dll"),
                 new DllName("GroboTrace,", "GroboTrace.dll"),
             };
 

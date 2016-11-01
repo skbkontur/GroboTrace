@@ -8,6 +8,7 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_set>
+#include <unordered_map>
 
 //global static singleton
 CorProfiler* corProfiler;
@@ -43,22 +44,131 @@ void DebugOutput(WCHAR* str)
 
 #define USE_SETTINGS
 
+void Log(wstring str)
+{
+	OutputDebugString((L"grobotrace: " + str).c_str());
+}
+
 DWORD STDMETHODCALLTYPE Suicide(void *p)
 {
 	for (int i = 0; i < 10; ++i)
 	{
 		Sleep(1000);
-		corProfiler->Log(L"Requesting profiler detach");
+		Log(L"Requesting profiler detach");
 		if (corProfiler->corProfilerInfo->RequestProfilerDetach(0) == S_OK)
 			break;
 	}
 	return 0;
 }
 
-void CorProfiler::Log(wstring str)
+#ifdef USE_SETTINGS
+
+vector<wstring> ParseLine(const wstring& str)
 {
-	OutputDebugString((L"grobotrace: " + str).c_str());
+	int n = str.length();
+	int state = 0;
+	vector<wstring> result;
+	vector<WCHAR> cur;
+	for (int i = 0; i <= n; ++i)
+	{
+		auto c = i < n ? str[i] : ' ';
+		switch (state)
+		{
+		case 0:
+			if (c != ' ' && c != '\t')
+			{
+				if (c == '"')
+					state = 2;
+				else {
+					cur.push_back(c);
+					state = 1;
+				}
+			}
+			break;
+		case 1:
+			if (c == ' ' || c == '\t')
+			{
+				result.push_back(wstring(cur.begin(), cur.end()));
+				cur.clear();
+				state = 0;
+			}
+			else cur.push_back(c);
+			break;
+		case 2:
+			if (c == '"')
+			{
+				result.push_back(wstring(cur.begin(), cur.end()));
+				cur.clear();
+				state = 0;
+			}
+			else if (c == '\\')
+				state = 3;
+			else
+				cur.push_back(c);
+			break;
+		case 3:
+			if (c == '"')
+				cur.push_back('"');
+			else if (c == '\\')
+				cur.push_back('\\');
+			else
+			{
+				cur.push_back('\\');
+				cur.push_back(c);
+			}
+			state = 2;
+			break;
+		}
+	}
+	return result;
 }
+
+bool NeedProfile(const wstring& settingsFileName)
+{
+	WCHAR fullFileName[1024];
+	WCHAR str[1024];
+	auto len = GetModuleFileNameW(nullptr, fullFileName, 1024);
+	Log(L"Asked to profile:");
+	Log(fullFileName);
+
+	auto settingsStream = wifstream(settingsFileName);
+	if (!settingsStream.is_open())
+		return false;
+
+	wstring fileName;
+	for (int i = len - 1; i >= 0; --i)
+		if (fullFileName[i] == '\\')
+		{
+			fileName = wstring(&fullFileName[i + 1]);
+			break;
+		}
+
+	bool needProfile = false;
+	while (!settingsStream.eof())
+	{
+		wstring cur;
+		getline(settingsStream, cur);
+		auto parsedLine = ParseLine(cur);
+
+		if (parsedLine.size() == 0)
+			continue;
+		const auto& processName = parsedLine[0];
+		if (processName != fileName)
+			continue;
+		if (parsedLine.size() == 1)
+		{
+			needProfile = true;
+			break;
+		}
+		auto commandLine = wstring(GetCommandLine());
+		for (int i = 1; i < parsedLine.size(); ++i)
+			needProfile |= commandLine.find(parsedLine[i]) != string::npos;
+	}
+	settingsStream.close();
+	return needProfile;
+}
+
+#endif
 
 HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk)
 {
@@ -77,38 +187,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
 
 #ifdef USE_SETTINGS
 
-	wstring settingsFileName = profilerFolder + L"\\GroboTrace.ini";
-	auto settingsStream = wifstream(settingsFileName);
-	bool needProfile;
-	if (!settingsStream.is_open())
-		needProfile = false;
-	else
-	{
-		auto toProfile = unordered_set<wstring>();
-		while (!settingsStream.eof())
-		{
-			wstring cur;
-			settingsStream >> cur;
-			toProfile.insert(cur);
-		}
-
-		WCHAR fullFileName[1024];
-		WCHAR str[1024];
-		auto len = GetModuleFileNameW(nullptr, fullFileName, 1024);
-		Log(L"Asked to profile:");
-		Log(fullFileName);
-
-		wstring fileName;
-		for (int i = len - 1; i >= 0; --i)
-			if (fullFileName[i] == '\\')
-			{
-				fileName = wstring(&fullFileName[i + 1]);
-				break;
-			}
-
-		needProfile = (toProfile.find(wstring(fileName)) != toProfile.end());
-		settingsStream.close();
-	}
+	bool needProfile = NeedProfile(profilerFolder + L"\\GroboTrace.ini");
 
 	Log(needProfile ? L"will profile" : L"skipped");
 	DWORD eventMask = needProfile ? COR_PRF_MONITOR_JIT_COMPILATION
