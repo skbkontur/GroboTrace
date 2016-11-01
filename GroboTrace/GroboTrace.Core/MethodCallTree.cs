@@ -2,31 +2,31 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace GroboTrace
+namespace GroboTrace.Core
 {
     internal class MethodCallTree
     {
         public MethodCallTree()
         {
-            root = new MethodCallNode(null, 0, null);
+            root = new MethodCallNode(null, 0);
             current = root;
-            startTicks = TracingWrapper.GetTicks();
+            startTicks = MethodBaseTracingInstaller.TicksReader();
         }
 
-        public void StartMethod(ulong methodHandle, MethodInfo method)
+        public void StartMethod(int methodId)
         {
-            current = current.StartMethod(methodHandle, method);
+            current = current.StartMethod(methodId);
         }
 
-        public void FinishMethod(ulong methodHandle, long elsapsed)
+        public void FinishMethod(int methodId, long elsapsed)
         {
-            current = current.FinishMethod(methodHandle, elsapsed);
+            current = current.FinishMethod(methodId, elsapsed);
         }
 
         public MethodStatsNode GetStatsAsTree(long endTicks)
         {
             var elapsedTicks = endTicks - startTicks;
-            MethodStatsNode result = root.GetStats(elapsedTicks);
+            var result = current.GetStats(elapsedTicks);
             result.MethodStats.Percent = 100.0;
             return result;
         }
@@ -34,8 +34,8 @@ namespace GroboTrace
         public List<MethodStats> GetStatsAsList(long endTicks)
         {
             var elapsedTicks = endTicks - startTicks;
-            var statsDict = new Dictionary<MethodInfo, MethodStats>();
-            foreach(var child in root.Children)
+            var statsDict = new Dictionary<MethodBase, MethodStats>();
+            foreach(var child in current.Children)
                 child.GetStats(statsDict);
             var result = statsDict.Values.Concat(new[] {new MethodStats {Calls = 1, Ticks = elapsedTicks - statsDict.Values.Sum(node => node.Ticks)}}).OrderByDescending(stats => stats.Ticks).ToList();
             foreach(var stats in result)
@@ -45,12 +45,12 @@ namespace GroboTrace
 
         public void ClearStats()
         {
-            root.ClearStats();
-            startTicks = TracingWrapper.GetTicks();
+            current.ClearStats();
+            startTicks = MethodBaseTracingInstaller.TicksReader();
         }
 
         private readonly MethodCallNode root;
         private MethodCallNode current;
-        private long startTicks;
+        internal long startTicks;
     }
 }

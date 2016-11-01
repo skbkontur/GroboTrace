@@ -1,40 +1,56 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 
 namespace GroboTrace
 {
     public static class TracingAnalyzer
     {
-        public static void MethodStarted(MethodInfo method, ulong methodHandle)
+        static TracingAnalyzer()
         {
-            if(tree == null)
-                tree = new MethodCallTree();
-            tree.StartMethod(methodHandle, method);
-        }
-
-        public static void MethodFinished(MethodInfo method, ulong methodHandle, long elapsed)
-        {
-            tree.FinishMethod(methodHandle, elapsed);
+            var groboTraceAssembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(assembly => assembly.FullName.StartsWith("GroboTrace.Core, "));
+            if(groboTraceAssembly == null)
+            {
+                Debug.WriteLine("There is no GroboTrace.Core loaded into current AppDomain");
+                getStatsDelegate = () =>
+                                   new Stats
+                                       {
+                                           Tree = new MethodStatsNode(),
+                                           List = new List<MethodStats>(),
+                                           ElapsedTicks = 0
+                                       };
+                clearStatsDelegate = () => { };
+            }
+            else
+            {
+                Debug.WriteLine("GroboTrace.Core is loaded into current AppDomain");
+                var tracingAnalyzerType = groboTraceAssembly.GetType("GroboTrace.Core.TracingAnalyzer");
+                if(tracingAnalyzerType == null)
+                    throw new InvalidOperationException("Unable to load type GroboTrace.Core.TracingAnalyzer");
+                var getStatsMethod = tracingAnalyzerType.GetMethod("GetStats", BindingFlags.Static | BindingFlags.Public);
+                if(getStatsMethod == null)
+                    throw new InvalidOperationException("Missing method GroboTrace.Core.TracingAnalyzer.GetStats");
+                var clearStatsMethod = tracingAnalyzerType.GetMethod("ClearStats", BindingFlags.Static | BindingFlags.Public);
+                if(clearStatsMethod == null)
+                    throw new InvalidOperationException("Missing method GroboTrace.Core.TracingAnalyzer.ClearStats");
+                getStatsDelegate = () => (Stats)getStatsMethod.Invoke(null, new object[0]);
+                clearStatsDelegate = () => clearStatsMethod.Invoke(null, new object[0]);
+            }
         }
 
         public static Stats GetStats()
         {
-            var ticks = TracingWrapper.GetTicks();
-            return new Stats
-                {
-                    Tree = tree == null ? new MethodStatsNode() : tree.GetStatsAsTree(ticks),
-                    List = tree == null ? new List<MethodStats>() : tree.GetStatsAsList(ticks)
-                };
+            return getStatsDelegate();
         }
 
         public static void ClearStats()
         {
-            if(tree != null)
-                tree.ClearStats();
+            clearStatsDelegate();
         }
 
-        [ThreadStatic]
-        private static MethodCallTree tree;
+        private static readonly Func<Stats> getStatsDelegate;
+        private static readonly Action clearStatsDelegate;
     }
 }

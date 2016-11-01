@@ -4,6 +4,34 @@
         <name>GrEmit</name>
     </assembly>
     <members>
+        <member name="M:GrEmit.Injection.MethodUtil.GetMethodAddress(System.Reflection.MethodBase)">
+            <summary>
+                Gets the address of the method stub
+            </summary>
+            <param name="method">The method handle.</param>
+            <returns></returns>
+        </member>
+        <member name="T:GrEmit.TypesAssignabilityVerificationKind">
+            <summary>
+            Level of verification of types compatibility
+            </summary>
+        </member>
+        <member name="F:GrEmit.TypesAssignabilityVerificationKind.None">
+            <summary>
+            Performs no checks at all with regard to types assignability
+            </summary>
+        </member>
+        <member name="F:GrEmit.TypesAssignabilityVerificationKind.LowLevelOnly">
+            <summary>
+            Makes no difference between CLI pointer types (objects, managed pointers, unmanaged pointers).
+            Still performs all verifications between these low level types (u can't store int64 to int32 for intance).
+            </summary>
+        </member>
+        <member name="F:GrEmit.TypesAssignabilityVerificationKind.HighLevel">
+            <summary>
+            Performs all verifications with regard to types assignability. This is the default behaviour.
+            </summary>
+        </member>
         <member name="M:GrEmit.GroboIL.DeclareLocal(System.Type,System.String,System.Boolean,System.Boolean)">
             <summary>
                 Declares a local variable of the specified type, optionally pinning the object referred to by the variable.
@@ -116,6 +144,11 @@
         <member name="M:GrEmit.GroboIL.Throw">
             <summary>
                 Throws the exception object currently on the evaluation stack.
+            </summary>
+        </member>
+        <member name="M:GrEmit.GroboIL.Rethrow">
+            <summary>
+                Rethrows the current exception.
             </summary>
         </member>
         <member name="M:GrEmit.GroboIL.Switch(GrEmit.GroboIL.Label[])">
@@ -397,6 +430,12 @@
             </summary>
             <param name="value">The value to push.</param>
         </member>
+        <member name="M:GrEmit.GroboIL.FreePinnedLocal(GrEmit.GroboIL.Local)">
+            <summary>
+            Clears the specified pinned local by setting it to null
+            </summary>
+            <param name="local"></param>
+        </member>
         <member name="M:GrEmit.GroboIL.Ldlen">
             <summary>
                 Pushes the number of elements of a zero-based, one-dimensional array onto the evaluation stack.
@@ -405,6 +444,12 @@
         <member name="M:GrEmit.GroboIL.Ldftn(System.Reflection.MethodInfo)">
             <summary>
                 Pushes an unmanaged pointer (type native int) to the native code implementing a specific method onto the evaluation stack.
+            </summary>
+            <param name="method">The method to load address of.</param>
+        </member>
+        <member name="M:GrEmit.GroboIL.Ldvirtftn(System.Reflection.MethodInfo)">
+            <summary>
+                Pushes an unmanaged pointer (type native int) to the native code implementing a particular virtual method associated with a specified object onto the evaluation stack.
             </summary>
             <param name="method">The method to load address of.</param>
         </member>
@@ -785,7 +830,7 @@
                 </para>
             </typeparam>
         </member>
-        <member name="M:GrEmit.GroboIL.Call(System.Reflection.MethodInfo,System.Type,System.Boolean,System.Type[])">
+        <member name="M:GrEmit.GroboIL.Call(System.Reflection.MethodInfo,System.Type,System.Boolean,System.Type[],System.Boolean)">
             <summary>
                 Calls the method indicated by the passed method descriptor.
                 <para></para>
@@ -801,6 +846,7 @@
                 True if the method call is a tail call. Emits the <see cref="F:System.Reflection.Emit.OpCodes.Tailcall">Tailcall</see> prefix.
             </param>
             <param name="optionalParameterTypes">The types of the optional arguments if the method is a varargs method; otherwise, null.</param>
+            <param name="isVirtual">Only if you sure, that method is virtual</param>
         </member>
         <member name="M:GrEmit.GroboIL.Call(System.Reflection.ConstructorInfo)">
             <summary>
@@ -845,6 +891,11 @@
                 The <see cref="T:System.Type">Type</see> of the result.
             </param>
             <param name="parameterTypes">The types of the required arguments to the instruction.</param>
+        </member>
+        <member name="P:GrEmit.GroboIL.VerificationKind">
+            <summary>
+            Gets or sets level of verifications with regard to types compatibility
+            </summary>
         </member>
     </members>
 </doc>

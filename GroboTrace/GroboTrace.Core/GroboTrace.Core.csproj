@@ -5,11 +5,11 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{23854843-A385-4299-8D52-3E567CECB004}</ProjectGuid>
+    <ProjectGuid>{721F6C9C-8718-4848-B568-5904F860044D}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Tests</RootNamespace>
-    <AssemblyName>Tests</AssemblyName>
+    <RootNamespace>GroboTrace.Core</RootNamespace>
+    <AssemblyName>GroboTrace.Core</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
@@ -23,6 +23,8 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -32,14 +34,16 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
-    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="GrEmit">
       <HintPath>..\..\Assemblies\GrEmit.dll</HintPath>
     </Reference>
-    <Reference Include="nunit.framework">
-      <HintPath>..\..\Assemblies\nunit.framework.dll</HintPath>
+    <Reference Include="RGiesecke.DllExport.Metadata, Version=1.0.0.0, Culture=neutral, PublicKeyToken=8f52d83c1a22df51, processorArchitecture=MSIL">
+      <HintPath>..\packages\UnmanagedExports.1.2.7\lib\net\RGiesecke.DllExport.Metadata.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -50,25 +54,30 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="TestBase.cs" />
+    <Compile Include="CycleFinderWithoutRecursion.cs" />
+    <Compile Include="DynamicMethodTracingInstaller.cs" />
+    <Compile Include="MethodCallNode.cs" />
+    <Compile Include="MethodCallTree.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Test.cs" />
-    <Compile Include="TestBoxEventRepository.cs" />
-    <Compile Include="TestClassByAttributeSelector.cs" />
-    <Compile Include="TestGenericMethod.cs" />
-    <Compile Include="TestGenericType.cs" />
-    <Compile Include="TestILReader.cs" />
-    <Compile Include="TestInterface.cs" />
-    <Compile Include="TestMethodBodyConverter.cs" />
-    <Compile Include="TestNonPublic.cs" />
+    <Compile Include="TracingAnalyzer.cs" />
+    <Compile Include="MethodBaseTracingInstaller.cs" />
+    <Compile Include="Loader.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\GroboTrace.Core\GroboTrace.Core.csproj">
-      <Project>{721f6c9c-8718-4848-b568-5904f860044d}</Project>
-      <Name>GroboTrace.Core</Name>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GroboTrace\GroboTrace.csproj">
+      <Project>{72ceec90-dcc6-45f6-9298-8e38e76a5869}</Project>
+      <Name>GroboTrace</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>copy $(TargetDir)$(TargetName).dll $(SolutionDir)..\Assemblies\
+</PostBuildEvent>
+  </PropertyGroup>
+  <Import Project="../packages/UnmanagedExports.1.2.7/tools/RGiesecke.DllExport.targets" Condition="Exists('../packages/UnmanagedExports.1.2.7/tools/RGiesecke.DllExport.targets')" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
