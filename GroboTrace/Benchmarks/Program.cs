@@ -18,6 +18,8 @@ namespace Benchmarks
     {
         public static void Main(string[] args)
         {
+            //new Program().Setup();
+            //return;
             BenchmarkRunner.Run<Program>(
                 ManualConfig.Create(DefaultConfig.Instance)
 //                            .With(Job.LegacyJitX86)
@@ -47,10 +49,11 @@ namespace Benchmarks
             {
                 initialized = true;
                 MethodBaseTracingInstaller.Init(null, null);
+                var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(void), Type.EmptyTypes, typeof(string), true);
+                method.GetILGenerator().Emit(OpCodes.Ret);
+                action = (Action)method.CreateDelegate(typeof(Action));
+                action();
             }
-            var method = new DynamicMethod(Guid.NewGuid().ToString(), typeof(void), Type.EmptyTypes, typeof(string), true);
-            method.GetILGenerator().Emit(OpCodes.Ret);
-            action = (Action)method.CreateDelegate(typeof(Action));
         }
 
         private static bool initialized;
