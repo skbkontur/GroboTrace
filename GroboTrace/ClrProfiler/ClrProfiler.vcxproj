@@ -103,7 +103,8 @@
       </Command>
     </CustomBuildStep>
     <PostBuildEvent>
-      <Command>copy $(TargetDir)$(TargetName).dll $(SolutionDir)..\Assemblies\</Command>
+      <Command>copy $(TargetDir)$(TargetName).dll $(SolutionDir)..\Output\
+copy $(TargetDir)$(TargetName).pdb $(SolutionDir)..\Output\</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -146,7 +147,8 @@
       </Command>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>copy $(TargetDir)$(TargetName).dll $(SolutionDir)..\Assemblies\</Command>
+      <Command>copy $(TargetDir)$(TargetName).dll $(SolutionDir)..\Output\
+copy $(TargetDir)$(TargetName).pdb $(SolutionDir)..\Output\</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
