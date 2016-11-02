@@ -1,18 +1,30 @@
 const string outDir = @"C:\GroboTrace";
+var fileExtensions = new [] {".dll", ".pdb", ".xml"};
 
 if(Directory.Exists(outDir)){
 	var guid = Guid.NewGuid();
 	foreach(var file in Directory.EnumerateFiles(outDir, "*")){
-		if(file.EndsWith(".dll") || file.EndsWith(".pdb"))
-			File.Move(file, file + guid);
+		var fileToDelete = file;
+		if(fileExtensions.Any(file.EndsWith)){
+			fileToDelete = file + guid;
+			File.Move(file, fileToDelete);
+		}
+		try{
+			File.Delete(fileToDelete);
+		}
+		catch (Exception e){
+			Console.Out.WriteLine("Can't delete {0} : {1}", fileToDelete, e.Message);
+		}
 	}
 }else{
 	Directory.CreateDirectory(outDir);
 }
 
 foreach(var file in Directory.EnumerateFiles(Directory.GetCurrentDirectory(), "*")){
-	var fileName = Path.GetFileName(file);
-	File.Copy(file, Path.Combine(outDir, fileName), true);
+	if(fileExtensions.Any(file.EndsWith)){
+		var fileName = Path.GetFileName(file);
+		File.Copy(file, Path.Combine(outDir, fileName), true);
+	}
 }
 
 Environment.SetEnvironmentVariable("COR_ENABLE_PROFILING", "1", EnvironmentVariableTarget.Machine);
