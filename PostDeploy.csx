@@ -1,4 +1,5 @@
 const string outDir = @"C:\GroboTrace";
+const string configFileName = "GroboTrace.ini";
 var fileExtensions = new [] {".dll", ".pdb", ".xml"};
 
 if(Directory.Exists(outDir)){

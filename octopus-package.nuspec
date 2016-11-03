@@ -9,6 +9,6 @@
   </metadata>
   <files>
     <file src="Output\**" />
-    <file src="install.csx" />
+    <file src="PostDeploy.csx" />
   </files>
 </package>
