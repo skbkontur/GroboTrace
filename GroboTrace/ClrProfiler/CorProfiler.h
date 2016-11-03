@@ -27,6 +27,8 @@ private:
 	void(* volatile init)(void*, void*);
 	void(* volatile setProfilerPath)(WCHAR*);
 
+	bool failed;
+
 	RTL_CRITICAL_SECTION criticalSection;
 	wstring profilerFolder;
 

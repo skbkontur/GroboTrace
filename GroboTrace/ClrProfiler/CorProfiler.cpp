@@ -13,7 +13,7 @@
 //global static singleton
 CorProfiler* corProfiler;
 
-CorProfiler::CorProfiler() : refCount(0), corProfilerInfo(nullptr), callback(nullptr), init(nullptr)
+CorProfiler::CorProfiler() : refCount(0), corProfilerInfo(nullptr), callback(nullptr), init(nullptr), failed(false)
 {
 }
 
@@ -396,6 +396,9 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 
 	//OutputDebugStringW(L"We are dead");
 
+	if (this->failed)
+		return S_OK;
+
 	if (FAILED(this->corProfilerInfo->GetFunctionInfo(functionId, &classId, &moduleId, &methodDefToken)))
 	{
 		DebugOutput(L"GetFunctionInfo failed");
@@ -453,8 +456,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 //	sprintf(str, "JIT Compilation of the method %I64d %ls.%ls\r\n", functionId, typeNameBuffer, methodNameBuffer);
 
 //	DebugOutput(str);
-
-	if (!callback)
+	if (callback == nullptr)
 	{
 		DebugOutput(L"Trying to enter critical section");
 		EnterCriticalSection(&criticalSection);
@@ -488,6 +490,9 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 				DebugOutput(L"Failed to obtain 'SetProfilerPath' method addr");
 				wsprintf(fileName, L"%ld", GetLastError());
 				DebugOutput(fileName);
+				failed = true;
+				LeaveCriticalSection(&criticalSection);
+				return S_OK;
 			}
 			else
 				DebugOutput(L"Successfully got 'SetProfilerPath' method addr");
@@ -499,6 +504,9 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 				DebugOutput(L"Failed to obtain 'Init' method addr");
 				wsprintf(fileName, L"%ld", GetLastError());
 				DebugOutput(fileName);
+				failed = true;
+				LeaveCriticalSection(&criticalSection);
+				return S_OK;
 			}
 			else
 				DebugOutput(L"Successfully got 'Init' method addr");
@@ -514,7 +522,14 @@ HRESULT STDMETHODCALLTYPE CorProfiler::JITCompilationStarted(FunctionID function
 
 			procAddr = GetProcAddress(groboTrace, "InstallTracing");
 			if (!procAddr)
+			{
 				DebugOutput(L"Failed to obtain 'InstallTracing' method addr");
+				wsprintf(fileName, L"%ld", GetLastError());
+				DebugOutput(fileName);
+				failed = true;
+				LeaveCriticalSection(&criticalSection);
+				return S_OK;
+			}
 			else
 				DebugOutput(L"Successfully got 'InstallTracing' method addr");
 			callback = reinterpret_cast<SharpResponse(*)(WCHAR*, WCHAR*, FunctionID, mdToken, char*, void*)>(procAddr);
