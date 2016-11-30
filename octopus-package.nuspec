@@ -8,7 +8,12 @@
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
   </metadata>
   <files>
-    <file src="Output\**" />
+    <file src="Output\ClrProfiler.dll" />
+    <file src="Output\ClrProfiler.pdb" />
+    <file src="Output\GroboTrace.Core.dll" />
+    <file src="Output\GroboTrace.Core.pdb" />
+    <file src="Output\GroboTrace.dll" />
+    <file src="Output\GroboTrace.pdb" />
     <file src="PostDeploy.csx" />
   </files>
 </package>
