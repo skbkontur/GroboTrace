@@ -8,7 +8,6 @@ using RGiesecke.DllExport;
 
 namespace GroboTrace.Core
 {
-    // Resolves GrEmit.dll - seems that this can only be done on .NET level
     public static class Loader
     {
         private static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
@@ -38,7 +37,6 @@ namespace GroboTrace.Core
 
         private static readonly DllName[] dlls =
             {
-                new DllName("GrEmit, Version=2.1.5.0", "GrEmit.dll"),
                 new DllName("GroboTrace,", "GroboTrace.dll"),
             };
 
