@@ -257,9 +257,6 @@ namespace GroboTrace.Core
                 return response;
             }
 
-            //if (method.Name == "Main" || method.Name == "add2" || method.Name == "twice")
-            //    return response;
-
             int functionId;
             AddMethod(method, out functionId);
 
