@@ -1,9 +1,9 @@
 @echo off
 
 set buildToolsPath=%ProgramFiles(x86)%\MSBuild
-set msbuild="%buildToolsPath%\14.0\bin\amd64\MSBuild.exe"
+set msbuild="%buildToolsPath%\12.0\bin\amd64\MSBuild.exe"
 set sln=GroboTrace\GroboTrace.sln
-SET VCTargetsPath=%buildToolsPath%\Microsoft.Cpp\v4.0\V140
+SET VCTargetsPath=%buildToolsPath%\Microsoft.Cpp\v4.0\V120
 
 set target=Output
 if exist %target% rd /s /q %target%
