@@ -9,6 +9,6 @@ set target=Output
 if exist %target% rd /s /q %target%
 mkdir %target%
 
-Assemblies\nuget.exe restore %sln%                                                    
+Assemblies\nuget.exe restore %sln%
 
 %msbuild% /v:q /t:Rebuild /p:Configuration=Release /nodeReuse:false /maxcpucount %sln%

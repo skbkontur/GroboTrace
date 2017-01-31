@@ -4,7 +4,7 @@
     <id>EDI.GroboTrace</id>
     <version>1.0.0.0</version>
     <authors>EDI Team</authors>
-    <description>EDI Grobo Trace Profiler</description>
+    <description>GroboTrace Profiler</description>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
   </metadata>
   <files>
