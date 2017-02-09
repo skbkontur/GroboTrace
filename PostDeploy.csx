@@ -1,34 +1,75 @@
+public static class GroboTraceInstaller
 {
-	const string outDir = @"C:\GroboTrace";
-	var fileExtensions = new [] {".dll", ".pdb", ".xml"};
+    public static void Install(string targetDir, string commaSeparatedProcessNamesToProfile)
+    {
+        if (string.IsNullOrWhiteSpace(targetDir))
+            throw new ArgumentException("targetDir is empty");
+        var processNamesToProfile = commaSeparatedProcessNamesToProfile
+            .Split(new [] {','}, StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrEmpty(x))
+            .ToArray();
+        DoInstall(targetDir, processNamesToProfile);
+        Console.Out.WriteLine("GroboTrace is successfully installed to: {0}", targetDir);
+        Console.Out.WriteLine("GroboTrace will profile the following processes:\n{0}", string.Join(Environment.NewLine, processNamesToProfile));
+    }
 
-	if(Directory.Exists(outDir)){
-		var guid = Guid.NewGuid();
-		foreach(var file in Directory.EnumerateFiles(outDir, "*")){
-			var fileToDelete = file;
-			if(fileExtensions.Any(file.EndsWith)){
-				fileToDelete = file + guid;
-				File.Move(file, fileToDelete);
-			}
-			try{
-				File.Delete(fileToDelete);
-			}
-			catch (Exception e){
-				Console.Out.WriteLine("Can't delete {0} : {1}", fileToDelete, e.Message);
-			}
-		}
-	}else{
-		Directory.CreateDirectory(outDir);
-	}
+    private static void DoInstall(string targetDir, string[] processNamesToProfile)
+    {
+        PrepareTargetDir(targetDir);
+        CopyGroboTraceBinaries(targetDir);
+        SetEnvironmentVariables(targetDir);
+        PrepareGroboTraceConfig(targetDir, processNamesToProfile);
+    }
 
-	foreach(var file in Directory.EnumerateFiles(Directory.GetCurrentDirectory(), "*")){
-		if(fileExtensions.Any(file.EndsWith)){
-			var fileName = Path.GetFileName(file);
-			File.Copy(file, Path.Combine(outDir, fileName), true);
-		}
-	}
+    private static void PrepareTargetDir(string targetDir)
+    {
+        if (!Directory.Exists(targetDir))
+            Directory.CreateDirectory(targetDir);
+        else
+        {
+            var guid = Guid.NewGuid();
+            foreach (var file in Directory.EnumerateFiles(targetDir, "*"))
+            {
+                var fileToDelete = file;
+                if (binFileExtensions.Any(file.EndsWith))
+                {
+                    fileToDelete = file + guid;
+                    File.Move(file, fileToDelete);
+                }
+                try
+                {
+                    File.Delete(fileToDelete);
+                }
+                catch (Exception e)
+                {
+                    Console.Out.WriteLine("Failed to delete file {0}: {1}", fileToDelete, e.Message);
+                }
+            }
+        }
+    }
 
-	Environment.SetEnvironmentVariable("COR_ENABLE_PROFILING", "1", EnvironmentVariableTarget.Machine);
-	Environment.SetEnvironmentVariable("COR_PROFILER", "{1bde2824-ad74-46f0-95a4-d7e7dab3b6b6}", EnvironmentVariableTarget.Machine);
-	Environment.SetEnvironmentVariable("COR_PROFILER_PATH", @"C:\GroboTrace\ClrProfiler.dll", EnvironmentVariableTarget.Machine);
+    private static void CopyGroboTraceBinaries(string targetDir)
+    {
+        var currentDir = Directory.GetCurrentDirectory();
+        foreach (var file in Directory.EnumerateFiles(currentDir, "*").Where(x => binFileExtensions.Any(x.EndsWith)))
+            File.Copy(file, Path.Combine(targetDir, Path.GetFileName(file)), overwrite: true);
+    }
+
+    private static void SetEnvironmentVariables(string targetDir)
+    {
+        Environment.SetEnvironmentVariable("COR_ENABLE_PROFILING", "1", EnvironmentVariableTarget.Machine);
+        Environment.SetEnvironmentVariable("COR_PROFILER", "{1bde2824-ad74-46f0-95a4-d7e7dab3b6b6}", EnvironmentVariableTarget.Machine);
+        Environment.SetEnvironmentVariable("COR_PROFILER_PATH", Path.Combine(targetDir, "ClrProfiler.dll"), EnvironmentVariableTarget.Machine);
+    }
+
+    private static void PrepareGroboTraceConfig(string targetDir, string[] processNamesToProfile)
+    {
+        var configFilename = Path.Combine(targetDir, "GroboTrace.ini");
+        File.WriteAllText(configFilename, string.Join(Environment.NewLine, processNamesToProfile));
+    }
+
+    private static readonly string[] binFileExtensions = new [] {".dll", ".pdb"};
 }
+
+GroboTraceInstaller.Install(Octopus.Parameters["GroboTrace.TargetDir"], Octopus.Parameters["GroboTrace.ProcessNamesToProfile"]);
