@@ -2,6 +2,7 @@ public static class GroboTraceInstaller
 {
     public static void Install(string targetDir, string commaSeparatedProcessNamesToProfile)
     {
+        Console.Out.WriteLine("Will install GroboTrace to: {0}", targetDir);
         if (string.IsNullOrWhiteSpace(targetDir))
             throw new ArgumentException("targetDir is empty");
         var processNamesToProfile = commaSeparatedProcessNamesToProfile
