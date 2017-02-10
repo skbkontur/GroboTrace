@@ -32,19 +32,14 @@ public static class GroboTraceInstaller
             var guid = Guid.NewGuid();
             foreach (var file in Directory.EnumerateFiles(targetDir, "*"))
             {
-                var fileToDelete = file;
-                if (binFileExtensions.Any(file.EndsWith))
-                {
-                    fileToDelete = file + guid;
-                    File.Move(file, fileToDelete);
-                }
                 try
                 {
-                    File.Delete(fileToDelete);
+                    File.Delete(file);
                 }
                 catch (Exception e)
                 {
-                    Console.Out.WriteLine("Failed to delete file {0}: {1}", fileToDelete, e.Message);
+                    Console.Out.WriteLine($"Failed to delete file {file}, will move it to {guid}. ErrorMessage: {e.Message}");
+                    File.Move(file, $"{file}_{guid}");
                 }
             }
         }
