@@ -40,17 +40,17 @@ namespace GroboTrace
             }
         }
 
-        public static Stats GetStats()
-        {
-            return getStatsDelegate();
-        }
-
-        public static void ClearStats()
+        public static void ClearStatsForCurrentThread()
         {
             clearStatsDelegate();
         }
 
-        private static readonly Func<Stats> getStatsDelegate;
+        public static Stats GetStatsForCurrentThread()
+        {
+            return getStatsDelegate();
+        }
+
         private static readonly Action clearStatsDelegate;
+        private static readonly Func<Stats> getStatsDelegate;
     }
 }

@@ -19,7 +19,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\..\Output\</OutputPath>
+    <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -30,7 +30,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\Output\</OutputPath>
+    <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -40,8 +40,9 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="GrEmit">
-      <HintPath>..\..\Assemblies\GrEmit.dll</HintPath>
+    <Reference Include="GrEmit, Version=2.1.9.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\GrEmit.2.1.9\lib\net40\GrEmit.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="RGiesecke.DllExport.Metadata, Version=1.0.0.0, Culture=neutral, PublicKeyToken=8f52d83c1a22df51, processorArchitecture=MSIL">
       <HintPath>..\packages\UnmanagedExports.1.2.7\lib\net\RGiesecke.DllExport.Metadata.dll</HintPath>
@@ -49,11 +50,6 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CycleFinderWithoutRecursion.cs" />
@@ -82,10 +78,10 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="../packages/UnmanagedExports.1.2.7/tools/RGiesecke.DllExport.targets" Condition="Exists('../packages/UnmanagedExports.1.2.7/tools/RGiesecke.DllExport.targets')" />
   <Target Name="AfterBuild">
-    <MakeDir Directories="$(TargetDir)Temp"/>
-    <Exec Command="..\Assemblies\ILMerge.exe /v4 /internalize /out:Temp\$(TargetName).dll $(TargetName).dll GrEmit.dll" WorkingDirectory="$(TargetDir)" />
-    <Copy SourceFiles="$(TargetDir)Temp\$(TargetName).dll" DestinationFolder="$(TargetDir)" />
-    <Copy SourceFiles="$(TargetDir)Temp\$(TargetName).pdb" DestinationFolder="$(TargetDir)" />
-    <RemoveDir Directories="$(TargetDir)Temp"/>
+    <MakeDir Directories="$(TargetDir)Temp" />
+    <Exec Command="$(SolutionDir)..\Tools\ILMerge.exe /internalize /log:$(TargetDir)ilmerge.log /targetplatform:&quot;v4, $(MSBuildProgramFiles32)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.5&quot; /out:Temp\$(TargetName).dll $(TargetName).dll GrEmit.dll" WorkingDirectory="$(TargetDir)" />
+    <Copy SourceFiles="$(TargetDir)Temp\$(TargetName).dll" DestinationFolder="$(SolutionDir)..\Output" />
+    <Copy SourceFiles="$(TargetDir)Temp\$(TargetName).pdb" DestinationFolder="$(SolutionDir)..\Output" />
+    <RemoveDir Directories="$(TargetDir)Temp" />
   </Target>
 </Project>
