@@ -38,8 +38,13 @@ public static class GroboTraceInstaller
                 }
                 catch (Exception e)
                 {
-                    Console.Out.WriteLine($"Failed to delete file {file}, will move it to {guid}. ErrorMessage: {e.Message}");
-                    File.Move(file, $"{file}_{guid}");
+                    Console.Out.WriteLine($"Failed to delete {file}: {e.Message}");
+                    if (binFileExtensions.Any(file.EndsWith))
+                    {
+                        var newFilename = $"{file}_{guid}";
+                        File.Move(file, newFilename);
+                        Console.Out.WriteLine($"Renamed {file} to {newFilename}");
+                    }
                 }
             }
         }
