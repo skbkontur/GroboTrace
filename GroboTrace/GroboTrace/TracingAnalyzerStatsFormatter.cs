@@ -7,11 +7,9 @@ namespace GroboTrace
     [DontTrace]
     public static class TracingAnalyzerStatsFormatter
     {
-        public static string Format(Stats stats, long elapsedMilliseconds, double quantile95)
+        public static string Format(Stats stats, long elapsedMilliseconds)
         {
             var sb = new StringBuilder();
-            sb.AppendLine();
-            sb.AppendLine($"Time = {elapsedMilliseconds} ms Quantile95 = {quantile95:F2} ms");
             Format(stats.Tree, elapsedMilliseconds, 0, sb);
             foreach (var item in stats.List)
                 Format(item, elapsedMilliseconds, 0, sb);
@@ -23,7 +21,7 @@ namespace GroboTrace
             if (stats == null || stats.Percent < 1.0)
                 return;
             var margin = new string(' ', depth * 4);
-            result.Append($"{margin}{stats.Percent:F2}% {stats.Percent * elapsedMilliseconds / 100.0:F2} ms");
+            result.Append($"{margin}{stats.Percent:F2}% {stats.Percent * elapsedMilliseconds / 100.0:F3} ms");
             result.Append(stats.Method != null ? $" {stats.Calls} calls {Format(stats.Method)}" : " ROOT");
             result.AppendLine();
         }
