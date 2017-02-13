@@ -40,8 +40,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DontTraceAttribute.cs" />
+    <Compile Include="IProfilerSink.cs" />
     <Compile Include="MethodStats.cs" />
     <Compile Include="MethodStatsNode.cs" />
+    <Compile Include="ProfiledSection.cs" />
+    <Compile Include="Profiler.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Stats.cs" />
     <Compile Include="TimeStatistics.cs" />

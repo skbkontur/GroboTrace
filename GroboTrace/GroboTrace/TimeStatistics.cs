@@ -4,31 +4,31 @@ namespace GroboTrace
 {
     public class TimeStatistics
     {
-        public TimeStatistics(string timeStatisticsKey)
+        public TimeStatistics(string groboTraceKey)
         {
-            TimeStatisticsKey = timeStatisticsKey;
+            GroboTraceKey = groboTraceKey;
         }
 
-        public bool AddTime(double milliseconds)
+        public bool RegisterDuration(double durationMilliseconds)
         {
-            lock (locker)
+            lock(locker)
             {
-                var d = Math.Max(milliseconds * 10, 1);
+                var d = Math.Max(durationMilliseconds * 10, 1);
                 var bin = Math.Min((int)Math.Round(Math.Log10(d) * 30), counts.Length - 1);
                 counts[bin]++;
                 TotalCount++;
-                MaxTime = Math.Max(MaxTime, milliseconds);
-                Quantile95Time = GetQuantile95();
-                return milliseconds > Quantile95Time || Math.Abs(milliseconds - MaxTime) < 1e-3;
+                MaxTime = Math.Max(MaxTime, durationMilliseconds);
+                Percentile95Time = GetPercentile95Time();
+                return durationMilliseconds > Percentile95Time || Math.Abs(durationMilliseconds - MaxTime) < 1e-3;
             }
         }
 
         public override string ToString()
         {
-            return $"{TimeStatisticsKey}: Requests={TotalCount} Quantile95={Quantile95Time:F3} ms Maximum={MaxTime:F3} ms";
+            return $"GroboTraceKey: {GroboTraceKey}, TotalCount: {TotalCount}, Percentile95Time: {Percentile95Time:F3} ms, MaxTime: {MaxTime:F3} ms";
         }
 
-        private double GetQuantile95()
+        private double GetPercentile95Time()
         {
             var index = (int)Math.Round(TotalCount * 0.95);
             var count = 0;
@@ -41,10 +41,11 @@ namespace GroboTrace
             return MaxTime;
         }
 
+        public string GroboTraceKey { get; }
         public int TotalCount { get; private set; }
         public double MaxTime { get; private set; }
-        public double Quantile95Time { get; private set; }
-        public string TimeStatisticsKey { get; }
+        public double Percentile95Time { get; private set; }
+
         private readonly int[] counts = new int[250];
         private readonly object locker = new object();
     }
