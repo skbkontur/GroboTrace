@@ -1,4 +1,6 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Globalization;
+using System.Reflection;
 using System.Text;
 
 using GrEmit.Utils;
@@ -22,8 +24,10 @@ namespace GroboTrace
             if(stats == null || stats.Percent < 1.0)
                 return;
             var margin = new string(' ', depth * 4);
-            result.Append($"{margin}{stats.Percent:F2}% {stats.Percent * elapsedMilliseconds / 100.0:F3} ms");
-            result.Append(stats.Method != null ? $" {stats.Calls} calls {Format(stats.Method)}" : " ROOT");
+            result.Append($"{margin}");
+            result.Append($"{stats.Percent.ToString("F2", CultureInfo.InvariantCulture)}% ");
+            result.Append($"{(elapsedMilliseconds * stats.Percent / 100.0).ToString("F3", CultureInfo.InvariantCulture)}ms ");
+            result.Append(stats.Method != null ? $"{stats.Calls} calls {Format(stats.Method)}" : "ROOT");
             result.AppendLine();
         }
 

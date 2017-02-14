@@ -25,7 +25,7 @@ namespace GroboTrace
 
         public override string ToString()
         {
-            return $"GroboTraceKey: {GroboTraceKey}, TotalCount: {TotalCount}, Percentile95Time: {Percentile95Time:F3} ms, MaxTime: {MaxTime:F3} ms";
+            return $"GroboTraceKey: {GroboTraceKey}, TotalCount: {TotalCount}, Percentile95Time: {TimeSpan.FromMilliseconds(Percentile95Time)}, MaxTime: {TimeSpan.FromMilliseconds(MaxTime)}";
         }
 
         private double GetPercentile95Time()
