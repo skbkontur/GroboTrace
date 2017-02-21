@@ -18,19 +18,19 @@ namespace GroboTrace
                 counts[bin]++;
                 TotalCount++;
                 MaxTime = Math.Max(MaxTime, durationMilliseconds);
-                Percentile95Time = GetPercentile95Time();
-                return durationMilliseconds > Percentile95Time || Math.Abs(durationMilliseconds - MaxTime) < 1e-3;
+                Percentile99Time = GetPercentile99Time();
+                return durationMilliseconds > Percentile99Time || Math.Abs(durationMilliseconds - MaxTime) < 1e-3;
             }
         }
 
         public override string ToString()
         {
-            return $"GroboTraceKey: {GroboTraceKey}, TotalCount: {TotalCount}, Percentile95Time: {TimeSpan.FromMilliseconds(Percentile95Time)}, MaxTime: {TimeSpan.FromMilliseconds(MaxTime)}";
+            return $"GroboTraceKey: {GroboTraceKey}, TotalCount: {TotalCount}, Percentile99Time: {TimeSpan.FromMilliseconds(Percentile99Time)}, MaxTime: {TimeSpan.FromMilliseconds(MaxTime)}";
         }
 
-        private double GetPercentile95Time()
+        private double GetPercentile99Time()
         {
-            var index = (int)Math.Round(TotalCount * 0.95);
+            var index = (int)Math.Round(TotalCount * 0.99);
             var count = 0;
             for(var i = 0; i < counts.Length; i++)
             {
@@ -44,7 +44,7 @@ namespace GroboTrace
         public string GroboTraceKey { get; }
         public int TotalCount { get; private set; }
         public double MaxTime { get; private set; }
-        public double Percentile95Time { get; private set; }
+        public double Percentile99Time { get; private set; }
 
         private readonly int[] counts = new int[250];
         private readonly object locker = new object();
