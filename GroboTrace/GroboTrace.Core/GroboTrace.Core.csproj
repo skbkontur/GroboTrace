@@ -80,8 +80,12 @@
   <Target Name="AfterBuild">
     <MakeDir Directories="$(TargetDir)Temp" />
     <Exec Command="$(SolutionDir)..\Tools\ILMerge.exe /internalize /log:$(TargetDir)ilmerge.log /targetplatform:&quot;v4, $(MSBuildProgramFiles32)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.5&quot; /out:Temp\$(TargetName).dll $(TargetName).dll GrEmit.dll" WorkingDirectory="$(TargetDir)" />
-    <Copy SourceFiles="$(TargetDir)Temp\$(TargetName).dll" DestinationFolder="$(SolutionDir)..\Output" />
-    <Copy SourceFiles="$(TargetDir)Temp\$(TargetName).pdb" DestinationFolder="$(SolutionDir)..\Output" />
+    <Copy SourceFiles="$(TargetDir)Temp\$(TargetName).dll" DestinationFolder="$(TargetDir)" />
+    <Copy SourceFiles="$(TargetDir)Temp\$(TargetName).pdb" DestinationFolder="$(TargetDir)" />
     <RemoveDir Directories="$(TargetDir)Temp" />
+  </Target>
+  <Target Name="CopyBuildResultsToOutputDir" AfterTargets="RGieseckeDllExport">
+    <Copy SourceFiles="$(TargetDir)$(TargetName).dll" DestinationFolder="$(SolutionDir)..\Output" />
+    <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(SolutionDir)..\Output" />
   </Target>
 </Project>
