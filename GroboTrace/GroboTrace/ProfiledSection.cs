@@ -20,7 +20,7 @@ namespace GroboTrace
             {
                 var stats = TracingAnalyzer.GetStatsForCurrentThread();
                 var trace = TracingAnalyzerStatsFormatter.Format(stats, stopwatch.ElapsedMilliseconds);
-                profilerSink.WhenCurrentDurationIsLongerThanPercentile95(stopwatch.Elapsed, timeStatistics, trace);
+                profilerSink.WhenCurrentDurationIsLongerThanPercentile99(stopwatch.Elapsed, timeStatistics, trace);
             }
         }
 
