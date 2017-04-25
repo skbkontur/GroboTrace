@@ -19,7 +19,7 @@ GroboTrace is a lightweight .NET performance profiler. It is designed to run ins
   COR_ENABLE_PROFILING = 1
   COR_PROFILER_PATH = C:\GroboTrace\ClrProfiler.dll
   COR_PROFILER = {1bde2824-ad74-46f0-95a4-d7e7dab3b6b6}
-    ```
+  ```
   4. Create config file `C:\GroboTrace\GroboTrace.ini` with CRLF-separated list of process names you want to profile:
   ```
   Foo.exe
