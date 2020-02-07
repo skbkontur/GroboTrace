@@ -1,4 +1,4 @@
- GroboTrace
+# GroboTrace
 GroboTrace is a lightweight .NET performance profiler. It is designed to run inside any .NET application 100% of its lifetime with relatively small performance overhead. This allows you to get an insight into current bottlencks of your app right in production environment.
 
 ## Setup
